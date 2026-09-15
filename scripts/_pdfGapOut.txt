@@ -1,0 +1,114 @@
+############################################################
+## REFERENCE  — Certificate of Aayara final.pdf (Desktop/DarbarTech/Student)
+## C:/Users/Nepal/Desktop/DarbarTech/Student/Certificate of Aayara final.pdf  exists=true
+############################################################
+  size=12720620B  producer=Adobe Photoshop for Windows -- Image Conversion Plug-in
+  contentStreams=82
+  textRuns=639  imagePlacements=1
+  ---- fonts (name size = count) ----
+    F2 1.0pt  x347
+    F3 1.0pt  x149
+    F1 1.0pt  x90
+    F6 1.0pt  x20
+    F4 1.0pt  x33
+    F2 1.0pt  x347
+    F3 1.0pt  x149
+    F1 1.0pt  x90
+    F6 1.0pt  x20
+    F4 1.0pt  x33
+  ---- placed images (name mmW x mmH @ mmX,mmY | px x py bpc cs) ----
+    Im0  297.01 x 209.97 mm @ (0.00, 0.00) | 3508 x 2480px 8bpc DeviceCMYK
+  ---- text runs (x,y pt | font size | txt) — first 60 ----
+    x=189.4 y=0.8 | F4 1.0pt | '\000\041'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\060'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\253'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\301'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\130'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\111'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\130'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\041'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\004'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\301'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\060'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\003'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\205'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\111'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\003'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\041'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\205'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\170'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\250'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\156'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\060'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\301'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\130'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\205'
+    x=189.4 y=0.8 | F4 1.0pt | '\000\172'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\301'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\122'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\130'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\263'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\003'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\130'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\263'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\003'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\301'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\205'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\003'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\041'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\060'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\253'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\301'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\130'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\111'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\347'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\003'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\301'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\122'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\004'
+    x=179.7 y=0.7 | F2 1.0pt | '\000\301'
+    x=229.8 y=0.6 | F3 1.0pt | '\001\335'
+    x=229.8 y=0.6 | F3 1.0pt | '\001\217'
+    x=229.8 y=0.6 | F3 1.0pt | '\002\100'
+    x=229.8 y=0.6 | F3 1.0pt | '\000\003'
+    x=229.8 y=0.6 | F3 1.0pt | '\002\100'
+    x=229.8 y=0.6 | F3 1.0pt | '\002\126'
+    x=229.8 y=0.6 | F3 1.0pt | '\001\254'
+    x=229.8 y=0.6 | F3 1.0pt | '\001\254'
+    x=229.8 y=0.6 | F3 1.0pt | '\001\272'
+    x=229.8 y=0.6 | F3 1.0pt | '\002\100'
+    x=229.8 y=0.6 | F3 1.0pt | '\002\100'
+    x=229.8 y=0.6 | F3 1.0pt | '\001\324'
+
+############################################################
+## GENERATED  — out/aayara-reference-test.pdf (repo)
+## out/aayara-reference-test.pdf  exists=true
+############################################################
+  size=3098375B  producer=?
+  contentStreams=20
+  textRuns=0  imagePlacements=0
+  ---- fonts (name size = count) ----
+  ---- placed images (name mmW x mmH @ mmX,mmY | px x py bpc cs) ----
+  ---- text runs (x,y pt | font size | txt) — first 60 ----
+
+############################################################
+## TEST  — Downloads/TESTING1.pdf
+## C:/Users/Nepal/Downloads/TESTING1.pdf  exists=true
+############################################################
+  size=3098400B  producer=?
+  contentStreams=20
+  textRuns=0  imagePlacements=0
+  ---- fonts (name size = count) ----
+  ---- placed images (name mmW x mmH @ mmX,mmY | px x py bpc cs) ----
+  ---- text runs (x,y pt | font size | txt) — first 60 ----
+
+############################################################
+## TEST  — Downloads/testing2.pdf
+## C:/Users/Nepal/Downloads/testing2.pdf  exists=true
+############################################################
+  size=3098405B  producer=?
+  contentStreams=20
+  textRuns=0  imagePlacements=0
+  ---- fonts (name size = count) ----
+  ---- placed images (name mmW x mmH @ mmX,mmY | px x py bpc cs) ----
+  ---- text runs (x,y pt | font size | txt) — first 60 ----

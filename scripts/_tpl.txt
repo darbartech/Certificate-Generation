@@ -1,0 +1,99 @@
+== template var + preview payload lines ==
+5|import apiClient from "@/lib/api/client";
+8|CertificateCreateInput,
+55|const [selectedCourseId, setSelectedCourseId] = useState<string>("");
+57|const [formData, setFormData] = useState<CertificateCreateInput & {
+58|certificateTemplateId?: string;
+59|certificateTemplateVersion?: string;
+71|certificateTemplateId: "",
+72|certificateTemplateVersion: "",
+83|const res = await apiClient.listCourses();
+101|const res = await apiClient.listSignatories();
+124|setSelectedCourseId(courseId);
+137|certificateTemplateId: "",
+138|certificateTemplateVersion: "",
+172|certificateTemplateId: course.certificateTemplateId || "",
+173|certificateTemplateVersion: course.certificateTemplateVersion || "",
+179|const selectedCourse = selectedCourseId
+180|? courses.find((c) => c.id === selectedCourseId) || null
+183|const isTemplateCompatible = formData.modules.length === EXACT_MODULE_COUNT;
+184|const templateIssues: string[] = [];
+185|if (selectedCourse && !isTemplateCompatible) {
+186|templateIssues.push(
+187|`Course &quot;${selectedCourse.code}&quot; defines ${formData.modules.length} active modules, but certificate template v2 requires exactly ${EXACT_MODULE_COUNT}.`
+190|if (!selectedCourse && !isTemplateCompatible) {
+191|templateIssues.push(
+192|`Certificate template v2 requires exactly ${EXACT_MODULE_COUNT} modules. Current count: ${formData.modules.length}.`
+199|setFormData((prev: CertificateCreateInput) => ({
+212|setFormData((prev: CertificateCreateInput) => ({
+227|setFormData((prev: CertificateCreateInput) => ({
+234|setFormData((prev: CertificateCreateInput) => {
+244|setFormData((prev: CertificateCreateInput) => {
+252|setFormData((prev: CertificateCreateInput) => {
+269|const result = await apiClient.generatePreview(formData);
+299|`Exactly ${EXACT_MODULE_COUNT} modules are required for the certificate template v2. Current count: ${formData.modules.length}.`
+321|const draftResult = await apiClient.createDraftCertificate(formData);
+326|await generatePreview();
+331|const draftResult = await apiClient.createDraftCertificate(formData);
+342|const result = await apiClient.issueCertificate(draftId!, formData);
+402|onClick={() => apiClient.downloadCertificate(issuedCert.id)}
+529|{templateIssues.length > 0 && (
+532|selectedCourse
+537|<p className="text-xs font-semibold text-amber-800 mb-1">Template compatibility warning</p>
+539|{templateIssues.map((ti, i) => (
+548|disabled={!canIssue || issueLoading || previewLoading || !isTemplateCompatible}
+553|) : !isTemplateCompatible ? (
+663|value={selectedCourseId}
+681|{selectedCourse && (
+701|<p className="font-mono font-medium text-emerald-900">{selectedCourse.code}</p>
+705|<p className="font-medium text-emerald-900">{selectedCourse.duration}</p>
+710|{selectedCourse.certificateTitle || selectedCourse.title}
+713|{selectedCourse.providerName && (
+716|<p className="font-medium text-emerald-900">{selectedCourse.providerName}</p>
+719|{selectedCourse.certificateTemplateId && (
+721|<p className="text-xs text-emerald-600">Template</p>
+723|{selectedCourse.certificateTemplateId}
+724|{selectedCourse.certificateTemplateVersion
+725|? ` v${selectedCourse.certificateTemplateVersion}`
+739|{selectedCourse.modules.filter((m) => m.active !== false).length}
+747|{selectedCourse.completionStatement && (
+750|<p className="text-sm text-emerald-900">{selectedCourse.completionStatement}</p>
+757|{selectedCourse && (
+758|isTemplateCompatible ? (
+762|Template compatible
+765|Course &quot;{selectedCourse.code}&quot; provides exactly {EXACT_MODULE_COUNT} active modules —
+766|matches the 4-column fixed layout of certificate v2.
+773|Template incompatibility — Issue blocked
+776|Course &quot;{selectedCourse.code}&quot; contains {formData.modules.length} active module{formData.modules.length !== 1 ? "s" : ""}.
+777|The current certificate design (v2) supports exactly {EXACT_MODULE_COUNT} modules.
+795|Alternatively, choose an approved alternate template that supports{" "}
+813|{selectedCourse && (
+816|Locked from course &quot;{selectedCourse.code}&quot; — change course above to edit these values.
+822|{selectedCourse
+830|{selectedCourse && (
+838|className={`input ${selectedCourse ? "bg-gray-50 text-gray-600 cursor-not-allowed" : ""}`}
+841|!selectedCourse &&
+846|disabled={!!selectedCourse}
+847|readOnly={!!selectedCourse}
+853|{selectedCourse && (
+861|className={`input ${selectedCourse ? "bg-gray-50 text-gray-600 cursor-not-allowed" : ""}`}
+864|!selectedCourse &&
+869|disabled={!!selectedCourse}
+870|readOnly={!!selectedCourse}
+879|{selectedCourse && (
+888|disabled={!!selectedCourse || formData.modules.length >= EXACT_MODULE_COUNT}
+895|Exactly {EXACT_MODULE_COUNT} modules are required for the v2 4-column certificate template.
+896|{selectedCourse && (
+912|selectedCourse
+920|selectedCourse ? "text-emerald-700" : "text-gray-500"
+929|disabled={!!selectedCourse || idx === 0}
+938|disabled={!!selectedCourse || idx === formData.modules.length - 1}
+947|disabled={!!selectedCourse}
+949|selectedCourse
+963|selectedCourse ? "bg-white text-gray-700 cursor-not-allowed border-emerald-200" : ""
+969|disabled={!!selectedCourse}
+970|readOnly={!!selectedCourse}
+975|selectedCourse ? "bg-white text-gray-700 cursor-not-allowed border-emerald-200" : ""
+981|disabled={!!selectedCourse}
+982|readOnly={!!selectedCourse}
+1122|<span>Template</span>

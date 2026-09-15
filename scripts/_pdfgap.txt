@@ -1,0 +1,51 @@
+############################################################
+## REFERENCE  Certificate of Aayara final.pdf
+## C:/Users/Nepal/Desktop/DarbarTech/Student/Certificate of Aayara final.pdf  exists=true
+############################################################
+pages=1  rawBytes=12720620  producer=Adobe Photoshop for Windows -- Image Conversion Plug-in
+
+--- Page 1  size=841.9x595.2pt  (~297.01 x 209.97 mm)  rotate=0
+  BT-blocks=0  text-runs=0  Do-images(placed)=0  Do-mentions=0
+  fonts/sizes:
+  placed images:
+  first up-to-14 text runs:
+  [raw content tail] (content parse error: cs.decodeIntoString is not a function)
+
+############################################################
+## TESTING.pdf (Downloads)
+## C:/Users/Nepal/Downloads/TESTING.pdf  exists=true
+############################################################
+pages=1  rawBytes=2064049  producer=DarbarTech Certificate Engine
+
+--- Page 1  size=841.9x595.3pt  (~297.00 x 210.00 mm)  rotate=0
+  BT-blocks=0  text-runs=0  Do-images(placed)=0  Do-mentions=0
+  fonts/sizes:
+  placed images:
+  first up-to-14 text runs:
+  [raw content tail] (content parse error: cs.decodeIntoString is not a function)
+
+############################################################
+## testing2.pdf (Downloads)
+## C:/Users/Nepal/Downloads/testing2.pdf  exists=true
+############################################################
+pages=1  rawBytes=3098405  producer=DarbarTech Certificate Engine
+
+--- Page 1  size=841.9x595.3pt  (~297.00 x 210.00 mm)  rotate=0
+  BT-blocks=0  text-runs=0  Do-images(placed)=0  Do-mentions=0
+  fonts/sizes:
+  placed images:
+  first up-to-14 text runs:
+  [raw content tail] (content parse error: cs.decodeIntoString is not a function)
+
+############################################################
+## out/aayara-reference-test.pdf (repo out)
+## out/aayara-reference-test.pdf  exists=true
+############################################################
+pages=1  rawBytes=3098375  producer=DarbarTech Certificate Engine
+
+--- Page 1  size=841.9x595.3pt  (~297.00 x 210.00 mm)  rotate=0
+  BT-blocks=0  text-runs=0  Do-images(placed)=0  Do-mentions=0
+  fonts/sizes:
+  placed images:
+  first up-to-14 text runs:
+  [raw content tail] (content parse error: cs.decodeIntoString is not a function)

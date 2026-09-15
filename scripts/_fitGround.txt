@@ -1,0 +1,190 @@
+## src/lib/renderer/moduleTileFit.ts
+  hasTypeTitles=true
+  lines=183
+===== page.tsx fit-token refs =====
+===== moduleFit.ts content (full, first 40) =====
+  ENOENT ENOENT: no such file or directory, open 'C:\Users\Nepal\Downloads\DarbarTech_Programmable_Certificate_System_Documentation\src\lib\renderer\moduleFit.ts'
+===== moduleTileFit.ts content (first 190) =====
+1|import type { TemplateConfig, TemplateField, CertificateModuleInput } from "@/lib/types";
+2|import { fitTextToField } from "./textFitting";
+3|
+4|/**
+5| * Pre-flight module-tile fit guard for the fixed 4-column v2 certificate.
+6| *
+7| * GAP-06 / GAP-08 (fail loud, never silently distort): the v2 module tiles are
+8| * fixed-geometry (1 line, uppercase transform, letterSpacing 10, minFontSize
+9| * 6.7pt for titles / 5.3pt for subtitles, overflowPolicy shrink_then_reject).
+10| *
+11| * The admin quick-fill pulls course modules straight from the catalog. If a
+12| * course's module titles are too long to fit a tile even at the documented
+13| * minimum font, the renderer MUST reject rather than distort — but the admin
+14| * should hear about that BEFORE clicking preview, as an actionable message with
+15| * the exact tile + field named, not as a raw shrink-then-reject error string.
+16| *
+17| * This guard intentionally uses the SAME `fitTextToField` + the SAME template
+18| * field geometry the renderer uses, so the form and the renderer can never
+19| * disagree about what fits.
+20| */
+21|
+22|export interface ModuleTileFitIssue {
+23|  /** 1-based module tile that failed. */
+24|  order: number;
+25|  /** The exact template field key, e.g. "module4Title". */
+26|  field: string;
+27|  /** Human-friendly tile label, e.g. "Module 4 — Title". */
+28|  tileLabel: string;
+29|  /** The text as the renderer will see it (uppercase transform applied). */
+30|  textToRender: string;
+31|  /** The recipient-entered text before transform. */
+32|  originalText: string;
+33|  /** Why it cannot fit: shrink floor hit, needs wrapping (not allowed), etc. */
+34|  reason: string;
+35|  /** True when the fit failed outright; false = warning-only at shrink floor. */
+36|  hard: boolean;
+37|}
+38|
+39|export const MODULE_TILE_FIELDS = [
+40|  { order: 1, title: "module1Title", subtitle: "module1Subtitle" },
+41|  { order: 2, title: "module2Title", subtitle: "module2Subtitle" },
+42|  { order: 3, title: "module3Title", subtitle: "module3Subtitle" },
+43|  { order: 4, title: "module4Title", subtitle: "module4Subtitle" },
+44|] as const;
+45|
+46|const getFontWidthFactor = (field: TemplateField): number => {
+47|  const f: Record<string, number> = {
+48|    "Montserrat-Regular": 0.55,
+49|    "Montserrat-Medium": 0.56,
+50|    "Montserrat-SemiBold": 0.57,
+51|    "Montserrat-Bold": 0.58,
+52|    "Montserrat-ExtraBold": 0.6,
+53|    "PlayfairDisplay-Bold": 0.48,
+54|    "PlayfairDisplay-SemiBold": 0.47,
+55|    CormorantGaramond: 0.44,
+56|    "CormorantGaramond-Bold": 0.46,
+57|  };
+58|  if (field.font && f[field.font]) return f[field.font];
+59|  return 0.55;
+60|};
+61|
+62|const describe = (
+63|  order: number,
+64|  fieldKey: string,
+65|  tileLabel: string,
+66|  textToRender: string,
+67|  originalText: string,
+68|  hard: boolean,
+69|  extra: string
+70|): ModuleTileFitIssue => ({
+71|  order,
+72|  field: fieldKey,
+73|  tileLabel,
+74|  textToRender,
+75|  originalText,
+76|  hard,
+77|  reason:
+78|    `In the v2 4-column geometry this tile is a single centered line. ` +
+79|    (hard
+80|      ? `Even at the documented minimum font (title 6.7pt / subtitle 5.3pt) it does not fit the ${tileLabel.toLowerCase()} box. ` +
+81|        `The renderer refuses to distort it (GAP: fail loud, never silently distort), so the certificate cannot be previewed or issued with this course. ` +
+82|        `Shorten the module title in the course catalog to fit, or choose a course whose module titles fit the 4-tile grid.`
+83|      : `It only fits after shrinking toward the documented minimum font. ` +
+84|        `It will render smaller than the reference layout, and may be rejected on issue. ` +
+85|        `Shorten the module title to keep it close to the reference sizing.`) +
+86|    `\n— ${extra}`,
+87|});
+88|
+89|/**
+90| * Pre-flight: returns every module tile whose title/subtitle cannot fit the v2
+91| * geometry, using the renderer's exact fit math. Empty array = issue is safe.
+92| */
+93|export const collectModuleTileIssues = (
+94|  template: TemplateConfig,
+95|  modules: CertificateModuleInput[]
+96|): ModuleTileFitIssue[] => {
+97|  const issues: ModuleTileFitIssue[] = [];
+98|
+99|  for (const mod of modules) {
+100|    const tile = MODULE_TILE_FIELDS.find((t) => t.order === mod.order);
+101|    if (!tile) {
+102|      issues.push({
+103|        order: mod.order,
+104|        field: `module${mod.order}Title`,
+105|        tileLabel: `Module ${mod.order} — Title`,
+106|        textToRender: mod.title || "",
+107|        originalText: mod.title || "",
+108|        hard: true,
+109|        reason:
+110|          `Certificate template v2 defines module tiles 1-4 only ("module1Title".."module4Title"). ` +
+111|          `Course data refers to tile order ${mod.order}, which the template does not define. ` +
+112|          `The renderer refuses to invent a tile (fail loud, never silently distort), so preview and issuance are blocked. ` +
+113|          `Use a course whose active modules map to tiles 1-4.`,
+114|      });
+115|      continue;
+116|    }
+117|
+118|    const titleField = template.fields?.[tile.title];
+119|    const subtitleField = template.fields?.[tile.subtitle];
+120|
+121|    if (titleField) {
+122|      const text = transformUppercase(mod.title || "", titleField) || "";
+123|      if (text) {
+124|        const res = fitTextToField(
+125|          text,
+126|          titleField,
+127|          getFontWidthFactor(titleField),
+128|          titleField.width ? titleField.width * 2.83465 : undefined,
+129|          []
+130|        );
+131|        if (!res.fit) {
+132|          issues.push(
+133|            describe(
+134|              mod.order,
+135|              tile.title,
+136|              `Module ${mod.order} — Title`,
+137|              text,
+138|              mod.title || "",
+139|              !res.shrunkToMin,
+140|              `"${mod.title}" is ${titleField.width ?? "?"}mm wide, 1 line, min font ${titleField.minFontSize ?? "?"}pt.`
+141|            )
+142|          );
+143|        }
+144|      }
+145|    }
+146|
+147|    if (subtitleField) {
+148|      const subtitle = subtitleFromModule(mod) || "";
+149|      const text = transformUppercase(subtitle, subtitleField) || "";
+150|      if (text) {
+151|        const res = fitTextToField(
+152|          text,
+153|          subtitleField,
+154|          getFontWidthFactor(subtitleField),
+155|          subtitleField.width ? subtitleField.width * 2.83465 : undefined,
+156|          []
+157|        );
+158|        if (!res.fit) {
+159|          issues.push(
+160|            describe(
+161|              mod.order,
+162|              tile.subtitle,
+163|              `Module ${mod.order} — Subtitle`,
+164|              text,
+165|              subtitle,
+166|              !res.shrunkToMin,
+167|              `"${subtitle}" is ${subtitleField.width ?? "?"}mm wide, 1 line, min font ${subtitleField.minFontSize ?? "?"}pt.`
+168|            )
+169|          );
+170|        }
+171|      }
+172|    }
+173|  }
+174|
+175|  return issues;
+176|};
+177|
+178|const transformUppercase = (text: string, field: TemplateField): string =>
+179|  field.transformUppercase || field.uppercase ? text.toUpperCase() : text;
+180|
+181|const subtitleFromModule = (mod: CertificateModuleInput): string =>
+182|  mod.subtitle || mod.subtitleText || "";
+183|

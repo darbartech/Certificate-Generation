@@ -1,0 +1,66 @@
+MATCH src/lib/renderer/moduleFit.ts :: no-import-line
+
+== moduleFit.ts lines 70-90 ==
+70| * Pre-flight issue collector — mirrors the renderer's exact fit math against
+71| * the documented minimum font, so the admin form and the PDF renderer can
+72| * never disagree about whether a module tile fits. Empty array = the four
+73| * module tiles are geometrically safe to issue.
+74| */
+75|export const collectModuleFitIssues = (
+76|  template: TemplateConfig,
+77|  modules: CertificateModuleInput[]
+78|): ModuleFitIssue[] => {
+79|  const issues: ModuleFitIssue[] = [];
+80|
+81|  for (const mod of modules) {
+82|    const tiles = getTileTemplate(template, mod.order);
+83|    if (!tiles) {
+84|      issues.push(
+85|        describe(
+86|          mod.order,
+87|          `module${mod.order}Title`,
+88|          `Module ${mod.order}`,
+89|          mod.title || "",
+90|          mod.title || "",
+
+== moduleTileFit.ts lines 1-40 ==
+1|import type { TemplateConfig, TemplateField, CertificateModuleInput } from "@/lib/types";
+2|import { fitTextToField } from "./textFitting";
+3|import { getModuleTileField, MODULE_TILE_ORDERS } from "@/lib/templates/darbartech-certificate-v2";
+4|import { transformUppercase } from "./render.helpers";
+5|
+6|/**
+7| * Pre-flight module-tile fit guard for the fixed 4-column v2 certificate.
+8| *
+9| * The v2 module tiles are FIXED geometry — single line, centered, uppercase,
+10| * fixed letterSpacing, and a documented hard floor on font size. The renderer
+11| * never silently distorts: if the recipient-entered module title/subtitle
+12| * cannot fit the tile even at the minimum allowed font, it REJECTS (fail loud)
+13| * rather than shrink out of spec, wrap onto a hidden second line, or overflow.
+14| *
+15| * That "fail loud at render" is correct, but it is poor design to discover it
+16| * only when the admin clicks Preview and gets a raw layout-warning dump.
+17| *
+18| * This guard runs the SAME fit math the renderer uses (fitTextToField + the
+19| * tile's own width/letterSpacing/minFontSize from the template) AHEAD of issue,
+20| * so the admin gets an actionable, per-tile reason while still on the form —
+21| * and issuance for an exact-match template is blocked before it costs a render.
+22| */
+23|
+24|export interface ModuleTileFitIssue {
+25|  /** 1-based tile number this module maps to (1..4). */
+26|  order: number;
+27|  /** The exact template field key, e.g. "module2Title". */
+28|  field: string;
+29|  /** Human-friendly tile label, e.g. "Module 2 — Title". */
+30|  tileLabel: string;
+31|  /** The text exactly as the renderer would render it (transform applied). */
+32|  textToRender: string;
+33|  /** The original raw text before template transform. */
+34|  originalText: string;
+35|  /** reason phrase: why it cannot fit. */
+36|  reason: string;
+37|  /** true = cannot fit even at min font (hard reject); false = fits only by
+38|   *  shrinking and may be rejected borderline (soft). */
+39|  hard: boolean;
+40|}

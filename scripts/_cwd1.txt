@@ -1,0 +1,1 @@
+cwd=C:\Users\Nepal\Downloads\DarbarTech_Programmable_Certificate_System_Documentation\npkg=true\ntsconfig=true\nnewPage=true\nfitC=true\nfitT=false

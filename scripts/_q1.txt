@@ -1,0 +1,11 @@
+PAGE_IS_NODE_EXISTS=true
+PAGE_LINES=1140
+== imports with renderer/moduleFit/text ===
+6|import { getCurrentDateStr } from "@/lib/renderer/dateFormatter";
+== renderer dir listing ===
+  (45981) certificateRenderer.ts
+  (937) dateFormatter.ts
+  (4413) moduleFit.ts
+  (5126) moduleTileFit.ts
+  (1662) qrGenerator.ts
+  (8282) textFitting.ts

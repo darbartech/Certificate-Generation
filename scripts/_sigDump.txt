@@ -1,0 +1,72 @@
+=== fitTextToField head (src/lib/renderer/textFitting.ts, 106-170) ===
+106|  fontName?: string
+107|): string[] => {
+108|  if (!text) return [];
+109|
+110|  const words = text.split(/\s+/);
+111|  const lines: string[] = [];
+112|  let currentLine = "";
+113|
+114|  for (const word of words) {
+115|    const testLine = currentLine ? `${currentLine} ${word}` : word;
+116|    const lineWidth = estimateTextWidth(testLine, fontSize, weight, letterSpacing, fontName);
+117|    if (lineWidth <= maxWidthPt) {
+118|      currentLine = testLine;
+119|    } else {
+120|      if (currentLine) lines.push(currentLine);
+121|      const wordWidth = estimateTextWidth(word, fontSize, weight, letterSpacing, fontName);
+122|      if (wordWidth > maxWidthPt) {
+123|        let remaining = word;
+124|        while (remaining.length > 0) {
+125|          let chunkLength = 1;
+126|          while (
+127|            chunkLength < remaining.length &&
+128|            estimateTextWidth(remaining.slice(0, chunkLength + 1), fontSize, weight, letterSpacing, fontName) <= maxWidthPt
+129|          ) {
+130|            chunkLength++;
+131|          }
+132|          lines.push(remaining.slice(0, chunkLength));
+133|          remaining = remaining.slice(chunkLength);
+134|        }
+135|        currentLine = "";
+136|      } else {
+137|        currentLine = word;
+138|      }
+139|    }
+140|  }
+141|  if (currentLine) lines.push(currentLine);
+142|
+143|  return lines;
+144|};
+145|
+146|export const fitTextToField = (
+147|  text: string,
+148|  field: TemplateField
+149|): {
+150|  fontSize: number;
+151|  lines: string[];
+152|  fits: boolean;
+153|  error?: string;
+154|} => {
+155|  const maxWidthPt = mmToPt(field.width);
+156|  const maxLines = field.maxLines;
+157|  const lineHeightRatio = field.lineHeight || 1.2;
+158|  const letterSpacing = field.letterSpacing || 0;
+159|  const fontName = field.font || "Helvetica";
+160|
+161|  let fontSize = field.fontSize;
+162|  let lines: string[] = [];
+163|  let fits = false;
+164|
+165|  while (fontSize >= field.minFontSize) {
+166|    lines = wrapTextToWidth(text, maxWidthPt, fontSize, field.weight, letterSpacing, fontName);
+167|
+168|    // NOTE: field.height is the tight ink bounding box measured off the PSD
+169|    // sample text, not a line-box budget (it isn't used to position the
+170|    // drawn text either - see certificateRenderer.ts, which positions purely
+
+=== refs ===
+## src/app/admin/certificates/new/page.tsx
+## src/lib/renderer/moduleFit.ts
+## src/lib/renderer/moduleTileFit.ts
+## src/lib/templates/darbartech-certificate-v2.ts

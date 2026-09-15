@@ -1,0 +1,1140 @@
+1|"use client";
+2|
+3|import { useState, useEffect, FormEvent, useRef, useCallback } from "react";
+4|import Link from "next/link";
+5|import apiClient from "@/lib/api/client";
+6|import { getCurrentDateStr } from "@/lib/renderer/dateFormatter";
+7|import type {
+8|  CertificateCreateInput,
+9|  CertificateModule,
+10|  AdminUser,
+11|  SignatoryRecord,
+12|  CourseRecord,
+13|  CourseModuleRecord,
+14|  CertificateRecord,
+15|} from "@/lib/types";
+16|
+17|const EXACT_MODULE_COUNT = 4;
+18|
+19|type CreateStage = "form" | "preview" | "success";
+20|
+21|// Converts a "data:<mime>;base64,<data>" string into a Blob object URL.
+22|// Blob URLs don't have the ~2MB character limit that data URIs hit when
+23|// used as an <iframe src> in Chrome, which causes large PDFs to silently
+24|// fail to render.
+25|function base64DataUriToBlobUrl(dataUri: string): string {
+26|  const [header, base64] = dataUri.split(",");
+27|  const mimeMatch = header.match(/data:(.*);base64/);
+28|  const mimeType = mimeMatch?.[1] || "application/pdf";
+29|
+30|  const byteChars = atob(base64);
+31|  const byteNumbers = new Array(byteChars.length);
+32|  for (let i = 0; i < byteChars.length; i++) {
+33|    byteNumbers[i] = byteChars.charCodeAt(i);
+34|  }
+35|  const byteArray = new Uint8Array(byteNumbers);
+36|  const blob = new Blob([byteArray], { type: mimeType });
+37|  return URL.createObjectURL(blob);
+38|}
+39|
+40|export default function CreateCertificatePage() {
+41|  const [stage, setStage] = useState<CreateStage>("form");
+42|  const [loadingCourses, setLoadingCourses] = useState(true);
+43|  const [coursesError, setCoursesError] = useState<string | null>(null);
+44|  const [loadingSignatories, setLoadingSignatories] = useState(true);
+45|  const [courses, setCourses] = useState<(CourseRecord & { modules: CourseModuleRecord[] })[]>([]);
+46|  const [signatories, setSignatories] = useState<SignatoryRecord[]>([]);
+47|  const [previewPdf, setPreviewPdf] = useState<string | null>(null);
+48|  const [previewLoading, setPreviewLoading] = useState(false);
+49|  const [previewErrors, setPreviewErrors] = useState<string[]>([]);
+50|  const [issueLoading, setIssueLoading] = useState(false);
+51|  const [formErrors, setFormErrors] = useState<string[]>([]);
+52|  const [issuedCert, setIssuedCert] = useState<CertificateRecord | null>(null);
+53|  const [draftId, setDraftId] = useState<string | null>(null);
+54|  const [user, setUser] = useState<AdminUser | null>(null);
+55|  const [selectedCourseId, setSelectedCourseId] = useState<string>("");
+56|
+57|  const [formData, setFormData] = useState<CertificateCreateInput & {
+58|    certificateTemplateId?: string;
+59|    certificateTemplateVersion?: string;
+60|    providerName?: string;
+61|    completionStatement?: string;
+62|  }>({
+63|    recipient: { name: "" },
+64|    program: { title: "", duration: "", id: "", code: "" },
+65|    modules: [],
+66|    grade: "",
+67|    completionDate: "",
+68|    issueDate: getCurrentDateStr(),
+69|    signatory: { name: "", position: "", id: "" },
+70|    secondarySignatory: { name: "Nirmala Shrestha", position: "Managing Director", id: "" },
+71|    certificateTemplateId: "",
+72|    certificateTemplateVersion: "",
+73|    providerName: "",
+74|    completionStatement: "",
+75|  });
+76|
+77|  const iframeRef = useRef<HTMLIFrameElement>(null);
+78|
+79|  const loadCourses = useCallback(async () => {
+80|    setLoadingCourses(true);
+81|    setCoursesError(null);
+82|    try {
+83|      const res = await apiClient.listCourses();
+84|      if (res.success && res.data) {
+85|        setCourses(res.data);
+86|      } else {
+87|        setCoursesError(res.errors?.join(", ") || "Failed to load courses");
+88|        setCourses([]);
+89|      }
+90|    } catch (err) {
+91|      setCoursesError(err instanceof Error ? err.message : "Failed to load courses");
+92|      setCourses([]);
+93|    } finally {
+94|      setLoadingCourses(false);
+95|    }
+96|  }, []);
+97|
+98|  const loadSignatories = async () => {
+99|    setLoadingSignatories(true);
+100|    try {
+101|      const res = await apiClient.listSignatories();
+102|      if (res.success && res.data) setSignatories(res.data);
+103|    } finally {
+104|      setLoadingSignatories(false);
+105|    }
+106|  };
+107|
+108|  useEffect(() => {
+109|    const stored = localStorage.getItem("dt_admin");
+110|    if (stored) setUser(JSON.parse(stored));
+111|    loadCourses();
+112|    loadSignatories();
+113|  }, [loadCourses]);
+114|
+115|  useEffect(() => {
+116|    return () => {
+117|      if (previewPdf && previewPdf.startsWith("blob:")) {
+118|        URL.revokeObjectURL(previewPdf);
+119|      }
+120|    };
+121|  }, [previewPdf]);
+122|
+123|  const handleCourseSelect = useCallback((courseId: string) => {
+124|    setSelectedCourseId(courseId);
+125|
+126|    if (!courseId) {
+127|      setFormData((prev) => ({
+128|        recipient: prev.recipient,
+129|        grade: prev.grade,
+130|        completionDate: prev.completionDate,
+131|        issueDate: prev.issueDate,
+132|        signatory: prev.signatory,
+133|        secondarySignatory: prev.secondarySignatory,
+134|        manualCertificateNumber: prev.manualCertificateNumber,
+135|        program: { id: "", title: "", duration: "", code: "" },
+136|        modules: [],
+137|        certificateTemplateId: "",
+138|        certificateTemplateVersion: "",
+139|        providerName: "",
+140|        completionStatement: "",
+141|      }));
+142|      return;
+143|    }
+144|
+145|    const course = courses.find((c) => c.id === courseId);
+146|    if (!course) return;
+147|
+148|    const titleFromCourse = course.certificateTitle || course.title;
+149|    const activeModules = course.modules
+150|      .filter((m: CourseModuleRecord) => m.active !== false)
+151|      .sort((a: CourseModuleRecord, b: CourseModuleRecord) => a.sort_order - b.sort_order);
+152|
+153|    setFormData((prev) => ({
+154|      recipient: prev.recipient,
+155|      grade: prev.grade,
+156|      completionDate: prev.completionDate,
+157|      issueDate: prev.issueDate,
+158|      signatory: prev.signatory,
+159|      secondarySignatory: prev.secondarySignatory,
+160|      manualCertificateNumber: prev.manualCertificateNumber,
+161|      program: {
+162|        id: course.id,
+163|        title: titleFromCourse,
+164|        duration: course.duration,
+165|        code: course.code,
+166|      },
+167|      modules: activeModules.map((m: CourseModuleRecord): CertificateModule => ({
+168|        order: m.sort_order,
+169|        title: m.title,
+170|        subtitle: m.subtitle || "",
+171|      })),
+172|      certificateTemplateId: course.certificateTemplateId || "",
+173|      certificateTemplateVersion: course.certificateTemplateVersion || "",
+174|      providerName: course.providerName || "",
+175|      completionStatement: course.completionStatement || "",
+176|    }));
+177|  }, [courses]);
+178|
+179|  const selectedCourse = selectedCourseId
+180|    ? courses.find((c) => c.id === selectedCourseId) || null
+181|    : null;
+182|
+183|  const isTemplateCompatible = formData.modules.length === EXACT_MODULE_COUNT;
+184|  const templateIssues: string[] = [];
+185|  if (selectedCourse && !isTemplateCompatible) {
+186|    templateIssues.push(
+187|      `Course &quot;${selectedCourse.code}&quot; defines ${formData.modules.length} active modules, but certificate template v2 requires exactly ${EXACT_MODULE_COUNT}.`
+188|    );
+189|  }
+190|  if (!selectedCourse && !isTemplateCompatible) {
+191|    templateIssues.push(
+192|      `Certificate template v2 requires exactly ${EXACT_MODULE_COUNT} modules. Current count: ${formData.modules.length}.`
+193|    );
+194|  }
+195|
+196|  const handleSignatorySelect = (signatoryId: string) => {
+197|    const sig = signatories.find((s) => s.id === signatoryId);
+198|    if (!sig) return;
+199|    setFormData((prev: CertificateCreateInput) => ({
+200|      ...prev,
+201|      signatory: {
+202|        id: sig.id,
+203|        name: sig.name,
+204|        position: sig.position,
+205|      },
+206|    }));
+207|  };
+208|
+209|  const handleSecondarySignatorySelect = (signatoryId: string) => {
+210|    const sig = signatories.find((s) => s.id === signatoryId);
+211|    if (!sig) return;
+212|    setFormData((prev: CertificateCreateInput) => ({
+213|      ...prev,
+214|      secondarySignatory: {
+215|        id: sig.id,
+216|        name: sig.name,
+217|        position: sig.position,
+218|      },
+219|    }));
+220|  };
+221|
+222|  const addModule = () => {
+223|    const nextOrder =
+224|      formData.modules.length > 0
+225|        ? Math.max(...formData.modules.map((m: CertificateModule) => m.order)) + 1
+226|        : 1;
+227|    setFormData((prev: CertificateCreateInput) => ({
+228|      ...prev,
+229|      modules: [...prev.modules, { order: nextOrder, title: "", subtitle: "" }],
+230|    }));
+231|  };
+232|
+233|  const removeModule = (idx: number) => {
+234|    setFormData((prev: CertificateCreateInput) => {
+235|      const remaining = prev.modules.filter((_: CertificateModule, i: number) => i !== idx);
+236|      return {
+237|        ...prev,
+238|        modules: remaining.map((m: CertificateModule, i: number) => ({ ...m, order: i + 1 })),
+239|      };
+240|    });
+241|  };
+242|
+243|  const updateModule = (idx: number, field: "title" | "subtitle", value: string) => {
+244|    setFormData((prev: CertificateCreateInput) => {
+245|      const updated = [...prev.modules];
+246|      updated[idx] = { ...updated[idx], [field]: value };
+247|      return { ...prev, modules: updated };
+248|    });
+249|  };
+250|
+251|  const moveModule = (idx: number, direction: -1 | 1) => {
+252|    setFormData((prev: CertificateCreateInput) => {
+253|      const modules = [...prev.modules];
+254|      const target = idx + direction;
+255|      if (target < 0 || target >= modules.length) return prev;
+256|      [modules[idx], modules[target]] = [modules[target], modules[idx]];
+257|      return {
+258|        ...prev,
+259|        modules: modules.map((m: CertificateModule, i: number) => ({ ...m, order: i + 1 })),
+260|      };
+261|    });
+262|  };
+263|
+264|  const generatePreview = async () => {
+265|    setPreviewLoading(true);
+266|    setPreviewErrors([]);
+267|    setFormErrors([]);
+268|    try {
+269|      const result = await apiClient.generatePreview(formData);
+270|      if (result.success && result.preview) {
+271|        // The API returns a base64 data URI. For anything but tiny PDFs this
+272|        // can exceed Chrome's ~2,097,152-character URL length limit when used
+273|        // directly as an <iframe src>, causing it to silently fail to render
+274|        // (no console error, just a blank frame). Converting to a Blob URL
+275|        // avoids that limit entirely.
+276|        const blobUrl = base64DataUriToBlobUrl(result.preview);
+277|        setPreviewPdf((prev) => {
+278|          if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+279|          return blobUrl;
+280|        });
+281|        setPreviewErrors(result.warnings || []);
+282|      } else {
+283|        setPreviewErrors(result.errors || ["Preview generation failed"]);
+284|      }
+285|    } catch (err) {
+286|      setPreviewErrors([err instanceof Error ? err.message : "Preview error"]);
+287|    } finally {
+288|      setPreviewLoading(false);
+289|    }
+290|  };
+291|
+292|  const validateForm = (): string[] => {
+293|    const errs: string[] = [];
+294|    if (!formData.recipient.name.trim()) errs.push("Recipient name is required");
+295|    if (!formData.program.title.trim()) errs.push("Program title is required");
+296|    if (!formData.program.duration.trim()) errs.push("Program duration is required");
+297|    if (formData.modules.length !== EXACT_MODULE_COUNT) {
+298|      errs.push(
+299|        `Exactly ${EXACT_MODULE_COUNT} modules are required for the certificate template v2. Current count: ${formData.modules.length}.`
+300|      );
+301|    }
+302|    formData.modules.forEach((m: CertificateModule, i: number) => {
+303|      if (!m.title.trim()) errs.push(`Module ${i + 1}: title is required`);
+304|    });
+305|    if (!formData.issueDate) errs.push("Issue date is required");
+306|    if (!formData.signatory.name.trim()) errs.push("Signatory name is required");
+307|    if (!formData.signatory.position.trim()) errs.push("Signatory position is required");
+308|    if (!formData.secondarySignatory?.name?.trim()) errs.push("Secondary Signatory name is required");
+309|    if (!formData.secondarySignatory?.position?.trim()) errs.push("Secondary Signatory position is required");
+310|    return errs;
+311|  };
+312|
+313|  const goToPreview = async (e: FormEvent) => {
+314|    e.preventDefault();
+315|    const errs = validateForm();
+316|    if (errs.length > 0) {
+317|      setFormErrors(errs);
+318|      return;
+319|    }
+320|    setFormErrors([]);
+321|    const draftResult = await apiClient.createDraftCertificate(formData);
+322|    if (draftResult.success && draftResult.certificate) {
+323|      setDraftId(draftResult.certificate.id);
+324|    }
+325|    setStage("preview");
+326|    await generatePreview();
+327|  };
+328|
+329|  const handleIssue = async () => {
+330|    if (!draftId) {
+331|      const draftResult = await apiClient.createDraftCertificate(formData);
+332|      if (!draftResult.success || !draftResult.certificate) {
+333|        setPreviewErrors(draftResult.errors || ["Could not create draft"]);
+334|        return;
+335|      }
+336|      setDraftId(draftResult.certificate.id);
+337|    }
+338|
+339|    setIssueLoading(true);
+340|    setPreviewErrors([]);
+341|    try {
+342|      const result = await apiClient.issueCertificate(draftId!, formData);
+343|      if (result.success && result.certificate) {
+344|        setIssuedCert(result.certificate as CertificateRecord);
+345|        setStage("success");
+346|      } else {
+347|        setPreviewErrors(result.errors || ["Issuance failed"]);
+348|      }
+349|    } catch (err) {
+350|      setPreviewErrors([err instanceof Error ? err.message : "Issuance error"]);
+351|    } finally {
+352|      setIssueLoading(false);
+353|    }
+354|  };
+355|
+356|  const canIssue = user?.permissions.issue || user?.role === "super_admin";
+357|
+358|  if (stage === "success" && issuedCert) {
+359|    return (
+360|      <div className="max-w-2xl mx-auto">
+361|        <div className="card card-body text-center py-12">
+362|          <div className="w-20 h-20 mx-auto rounded-full bg-emerald-100 flex items-center justify-center mb-6">
+363|            <svg className="w-10 h-10 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+364|              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+365|            </svg>
+366|          </div>
+367|          <h1 className="text-2xl font-bold text-gray-900 mb-2">Certificate Issued!</h1>
+368|          <p className="text-gray-500 mb-8">
+369|            The certificate has been successfully issued and is available for verification.
+370|          </p>
+371|          <div className="bg-gray-50 rounded-lg p-6 mb-8 text-left max-w-md mx-auto">
+372|            <div className="space-y-3 text-sm">
+373|              <div className="flex justify-between">
+374|                <span className="text-gray-500">Certificate No.</span>
+375|                <span className="font-mono font-semibold text-brand-navy">{issuedCert.certificate_number}</span>
+376|              </div>
+377|              <div className="flex justify-between">
+378|                <span className="text-gray-500">Recipient</span>
+379|                <span className="font-medium">{issuedCert.recipient_name}</span>
+380|              </div>
+381|              {issuedCert.student_id && (
+382|                <div className="flex justify-between">
+383|                  <span className="text-gray-500">Student ID</span>
+384|                  <span className="font-mono font-medium">{issuedCert.student_id}</span>
+385|                </div>
+386|              )}
+387|              <div className="flex justify-between">
+388|                <span className="text-gray-500">Program</span>
+389|                <span className="font-medium">{issuedCert.program_title}</span>
+390|              </div>
+391|              <div className="flex justify-between">
+392|                <span className="text-gray-500">Status</span>
+393|                <span className="badge badge-issued">ISSUED</span>
+394|              </div>
+395|            </div>
+396|          </div>
+397|          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+398|            <Link href="/admin/certificates" className="btn-primary px-6 w-full sm:w-auto">
+399|              ← Back to Certificates
+400|            </Link>
+401|            <button
+402|              onClick={() => apiClient.downloadCertificate(issuedCert.id)}
+403|              className="btn-secondary px-6 w-full sm:w-auto"
+404|            >
+405|              Download PDF
+406|            </button>
+407|            <a
+408|              href={`/verify/${issuedCert.verification_token}`}
+409|              target="_blank"
+410|              rel="noopener noreferrer"
+411|              className="btn-gold px-6 w-full sm:w-auto"
+412|            >
+413|              View Verification
+414|            </a>
+415|          </div>
+416|        </div>
+417|      </div>
+418|    );
+419|  }
+420|
+421|  if (stage === "preview") {
+422|    return (
+423|      <div className="space-y-6">
+424|        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+425|          <div>
+426|            <h1 className="text-2xl font-bold text-gray-900">Preview &amp; Issue</h1>
+427|            <p className="text-sm text-gray-500 mt-1">Review the certificate before final issuance</p>
+428|          </div>
+429|          <div className="flex items-center gap-3">
+430|            <button onClick={() => setStage("form")} className="btn-secondary">
+431|              ← Edit Form
+432|            </button>
+433|          </div>
+434|        </div>
+435|
+436|        {previewErrors.length > 0 && (
+437|          <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-4">
+438|            <p className="text-sm font-medium text-yellow-800 mb-2">Layout warnings:</p>
+439|            <ul className="list-disc list-inside space-y-0.5 text-sm text-yellow-700">
+440|              {previewErrors.map((e, i) => (
+441|                <li key={i}>{e}</li>
+442|              ))}
+443|            </ul>
+444|          </div>
+445|        )}
+446|
+447|        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+448|          <div className="lg:col-span-2 card overflow-hidden">
+449|            <div className="card-header flex items-center justify-between">
+450|              <h2 className="font-semibold text-gray-900">Certificate Preview</h2>
+451|              <button onClick={generatePreview} className="btn-secondary text-sm py-1.5" disabled={previewLoading}>
+452|                {previewLoading ? (
+453|                  <span className="inline-flex items-center gap-2"><span className="spinner"></span>Regenerating...</span>
+454|                ) : (
+455|                  "🔄 Regenerate Preview"
+456|                )}
+457|              </button>
+458|            </div>
+459|            <div className="p-4 bg-gray-100">
+460|              {previewLoading && !previewPdf ? (
+461|                <div className="h-[600px] flex items-center justify-center text-gray-500">
+462|                  <span className="spinner w-8 h-8 border-brand-navy border-t-transparent"></span>
+463|                  <span className="ml-3">Generating preview...</span>
+464|                </div>
+465|              ) : previewPdf ? (
+466|                <iframe
+467|                  ref={iframeRef}
+468|                  src={previewPdf}
+469|                  className="w-full h-[800px] rounded-lg border border-gray-200 bg-white shadow-sm"
+470|                  title="Certificate PDF preview"
+471|                />
+472|              ) : (
+473|                <div className="h-[600px] flex items-center justify-center text-gray-500">
+474|                  Preview not available. Click Regenerate.
+475|                </div>
+476|              )}
+477|            </div>
+478|          </div>
+479|
+480|          <div className="space-y-6">
+481|            <div className="card card-body space-y-4">
+482|              <h3 className="font-semibold text-gray-900">Summary</h3>
+483|              <dl className="space-y-2 text-sm">
+484|                <div className="flex justify-between gap-4">
+485|                  <dt className="text-gray-500">Recipient</dt>
+486|                  <dd className="font-medium text-right">{formData.recipient.name}</dd>
+487|                </div>
+488|                <div className="flex justify-between gap-4">
+489|                  <dt className="text-gray-500">Program</dt>
+490|                  <dd className="font-medium text-right max-w-[60%]">{formData.program.title}</dd>
+491|                </div>
+492|                <div className="flex justify-between gap-4">
+493|                  <dt className="text-gray-500">Duration</dt>
+494|                  <dd className="font-medium text-right">{formData.program.duration}</dd>
+495|                </div>
+496|                <div className="flex justify-between gap-4">
+497|                  <dt className="text-gray-500">Modules</dt>
+498|                  <dd className="font-medium text-right">{formData.modules.length}</dd>
+499|                </div>
+500|                <div className="flex justify-between gap-4">
+501|                  <dt className="text-gray-500">Grade</dt>
+502|                  <dd className="font-medium text-right">{formData.grade || "—"}</dd>
+503|                </div>
+504|                <div className="flex justify-between gap-4">
+505|                  <dt className="text-gray-500">Issue Date</dt>
+506|                  <dd className="font-medium text-right">{formData.issueDate}</dd>
+507|                </div>
+508|                <div className="flex justify-between gap-4">
+509|                  <dt className="text-gray-500">Signatory</dt>
+510|                  <dd className="font-medium text-right max-w-[60%]">{formData.signatory.name}</dd>
+511|                </div>
+512|                <div className="flex justify-between gap-4">
+513|                  <dt className="text-gray-500">Secondary Signatory</dt>
+514|                  <dd className="font-medium text-right max-w-[60%]">{formData.secondarySignatory?.name || "—"}</dd>
+515|                </div>
+516|              </dl>
+517|            </div>
+518|
+519|            <div className="card card-body space-y-4">
+520|              <h3 className="font-semibold text-gray-900">Issue Certificate</h3>
+521|              <p className="text-xs text-gray-500">
+522|                Issuing is final. Issued certificates become publicly verifiable and cannot be edited silently.
+523|              </p>
+524|              {!canIssue && (
+525|                <p className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200">
+526|                  Your account does not have permission to issue certificates.
+527|                </p>
+528|              )}
+529|              {templateIssues.length > 0 && (
+530|                <div
+531|                  className={
+532|                    selectedCourse
+533|                      ? "rounded-lg border border-amber-300 bg-amber-50 p-3"
+534|                      : "rounded-lg border border-amber-300 bg-amber-50 p-3"
+535|                  }
+536|                >
+537|                  <p className="text-xs font-semibold text-amber-800 mb-1">Template compatibility warning</p>
+538|                  <ul className="space-y-0.5 text-xs text-amber-700 list-disc list-inside">
+539|                    {templateIssues.map((ti, i) => (
+540|                      <li key={i}>{ti}</li>
+541|                    ))}
+542|                  </ul>
+543|                </div>
+544|              )}
+545|              <div className="flex flex-col gap-2">
+546|                <button
+547|                  onClick={handleIssue}
+548|                  disabled={!canIssue || issueLoading || previewLoading || !isTemplateCompatible}
+549|                  className="btn-success w-full"
+550|                >
+551|                  {issueLoading ? (
+552|                    <span className="inline-flex items-center gap-2"><span className="spinner"></span>Issuing...</span>
+553|                  ) : !isTemplateCompatible ? (
+554|                    `⚠ Module count must be exactly ${EXACT_MODULE_COUNT}`
+555|                  ) : (
+556|                    "✓ Approve & Issue Certificate"
+557|                  )}
+558|                </button>
+559|                <button onClick={generatePreview} className="btn-secondary w-full" disabled={previewLoading}>
+560|                  Regenerate Preview
+561|                </button>
+562|              </div>
+563|            </div>
+564|          </div>
+565|        </div>
+566|      </div>
+567|    );
+568|  }
+569|
+570|  return (
+571|    <form onSubmit={goToPreview} className="space-y-6">
+572|      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+573|        <div>
+574|          <h1 className="text-2xl font-bold text-gray-900">Create Certificate</h1>
+575|          <p className="text-sm text-gray-500 mt-1">Enter recipient, program, and signatory details</p>
+576|        </div>
+577|      </div>
+578|
+579|      {formErrors.length > 0 && (
+580|        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+581|          <p className="text-sm font-medium text-red-800 mb-2">Please fix the following errors:</p>
+582|          <ul className="list-disc list-inside space-y-0.5 text-sm text-red-700">
+583|            {formErrors.map((e, i) => (<li key={i}>{e}</li>))}
+584|          </ul>
+585|        </div>
+586|      )}
+587|
+588|      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+589|        <div className="lg:col-span-2 space-y-6">
+590|          <div className="card card-body space-y-5">
+591|            <h2 className="font-semibold text-gray-900 border-b pb-3">Recipient Information</h2>
+592|            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+593|              <div className="sm:col-span-2">
+594|                <label className="label">Full Name *</label>
+595|                <input
+596|                  type="text"
+597|                  className="input"
+598|                  value={formData.recipient.name}
+599|                  onChange={(e) => setFormData({ ...formData, recipient: { ...formData.recipient, name: e.target.value } })}
+600|                  placeholder="e.g. Mohan Shahi"
+601|                  maxLength={100}
+602|                />
+603|              </div>
+604|              <div>
+605|                <label className="label">Student ID</label>
+606|                <input
+607|                  type="text"
+608|                  className="input bg-gray-50 text-gray-500 cursor-not-allowed"
+609|                  value="Auto-generated on issue"
+610|                  disabled
+611|                  readOnly
+612|                />
+613|                <p className="text-xs text-gray-400 mt-1">
+614|                  A unique Student ID is assigned automatically when this certificate is issued.
+615|                </p>
+616|              </div>
+617|            </div>
+618|          </div>
+619|
+620|          <div className="card card-body space-y-5">
+621|            <h2 className="font-semibold text-gray-900 border-b pb-3">Course Selection</h2>
+622|            <p className="text-xs text-gray-500 -mt-3">
+623|              Select a course to auto-fill the program title, duration, course modules, and provider text below.
+624|              Recipient and result fields are left untouched.
+625|            </p>
+626|
+627|            {loadingCourses ? (
+628|              <div className="border border-gray-200 rounded-lg p-6 flex items-center justify-center text-gray-500">
+629|                <span className="spinner w-5 h-5 border-brand-navy border-t-transparent"></span>
+630|                <span className="ml-3 text-sm">Loading course catalog...</span>
+631|              </div>
+632|            ) : coursesError ? (
+633|              <div className="border border-red-200 bg-red-50 rounded-lg p-4">
+634|                <p className="text-sm font-medium text-red-800 mb-1">Could not load course catalog</p>
+635|                <p className="text-xs text-red-700 mb-3">{coursesError}</p>
+636|                <button
+637|                  type="button"
+638|                  onClick={loadCourses}
+639|                  className="btn-secondary text-xs py-1 px-3"
+640|                >
+641|                  Retry Load Courses
+642|                </button>
+643|              </div>
+644|            ) : courses.length === 0 ? (
+645|              <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center">
+646|                <p className="text-sm text-gray-500 mb-3">
+647|                  No courses are available in the catalog yet.
+648|                </p>
+649|                <button
+650|                  type="button"
+651|                  onClick={loadCourses}
+652|                  className="btn-secondary text-xs py-1 px-3"
+653|                >
+654|                  Refresh Catalog
+655|                </button>
+656|              </div>
+657|            ) : (
+658|              <div className="space-y-4">
+659|                <div>
+660|                  <label className="label">Course Catalog</label>
+661|                  <select
+662|                    className="input"
+663|                    value={selectedCourseId}
+664|                    onChange={(e) => handleCourseSelect(e.target.value)}
+665|                  >
+666|                    <option value="">— None (manual entry) —</option>
+667|                    {courses.map((c) => (
+668|                      <option
+669|                        key={c.id}
+670|                        value={c.id}
+671|                        disabled={!c.active}
+672|                      >
+673|                        {c.active ? "" : "[INACTIVE] "}
+674|                        {c.code} — {c.title}
+675|                        {` (${c.duration}, ${c.modules.filter((m) => m.active !== false).length} modules)`}
+676|                      </option>
+677|                    ))}
+678|                  </select>
+679|                </div>
+680|
+681|                {selectedCourse && (
+682|                  <div className="border border-emerald-200 bg-emerald-50 rounded-lg p-4">
+683|                    <div className="flex items-start justify-between gap-3 mb-2">
+684|                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+685|                        ✓ Course data loaded
+686|                      </p>
+687|                      <button
+688|                        type="button"
+689|                        onClick={() => handleCourseSelect("")}
+690|                        className="text-xs text-emerald-700 hover:text-emerald-900 underline underline-offset-2 whitespace-nowrap"
+691|                      >
+692|                        Clear &amp; switch to manual
+693|                      </button>
+694|                    </div>
+695|                    <p className="text-xs text-emerald-600 mb-3">
+696|                      Program title, duration, and modules below are locked to this catalog entry.
+697|                    </p>
+698|                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+699|                      <div>
+700|                        <p className="text-xs text-emerald-600">Course Code</p>
+701|                        <p className="font-mono font-medium text-emerald-900">{selectedCourse.code}</p>
+702|                      </div>
+703|                      <div>
+704|                        <p className="text-xs text-emerald-600">Duration</p>
+705|                        <p className="font-medium text-emerald-900">{selectedCourse.duration}</p>
+706|                      </div>
+707|                      <div className="col-span-2">
+708|                        <p className="text-xs text-emerald-600">Program Title</p>
+709|                        <p className="font-medium text-emerald-900">
+710|                          {selectedCourse.certificateTitle || selectedCourse.title}
+711|                        </p>
+712|                      </div>
+713|                      {selectedCourse.providerName && (
+714|                        <div className="col-span-2">
+715|                          <p className="text-xs text-emerald-600">Provider / Issuer</p>
+716|                          <p className="font-medium text-emerald-900">{selectedCourse.providerName}</p>
+717|                        </div>
+718|                      )}
+719|                      {selectedCourse.certificateTemplateId && (
+720|                        <div>
+721|                          <p className="text-xs text-emerald-600">Template</p>
+722|                          <p className="font-mono text-xs text-emerald-900">
+723|                            {selectedCourse.certificateTemplateId}
+724|                            {selectedCourse.certificateTemplateVersion
+725|                              ? ` v${selectedCourse.certificateTemplateVersion}`
+726|                              : ""}
+727|                          </p>
+728|                        </div>
+729|                      )}
+730|                      <div>
+731|                        <p className="text-xs text-emerald-600">Active Modules</p>
+732|                        <p
+733|                          className={`font-medium ${
+734|                            formData.modules.length === EXACT_MODULE_COUNT
+735|                              ? "text-emerald-900"
+736|                              : "text-amber-800"
+737|                          }`}
+738|                        >
+739|                          {selectedCourse.modules.filter((m) => m.active !== false).length}
+740|                          {formData.modules.length !== EXACT_MODULE_COUNT && (
+741|                            <span className="text-[10px] uppercase tracking-wide ml-1 text-amber-700 bg-amber-100 border border-amber-200 rounded px-1 py-0.5">
+742|                              mismatch
+743|                            </span>
+744|                          )}
+745|                        </p>
+746|                      </div>
+747|                      {selectedCourse.completionStatement && (
+748|                        <div className="col-span-2">
+749|                          <p className="text-xs text-emerald-600">Completion Statement</p>
+750|                          <p className="text-sm text-emerald-900">{selectedCourse.completionStatement}</p>
+751|                        </div>
+752|                      )}
+753|                    </div>
+754|                  </div>
+755|                )}
+756|
+757|                {selectedCourse && (
+758|                  isTemplateCompatible ? (
+759|                    <div className="border border-emerald-300 bg-emerald-50 rounded-lg p-3">
+760|                      <p className="text-sm font-semibold text-emerald-800 flex items-center gap-1.5">
+761|                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-500 text-white text-[10px]">✓</span>
+762|                        Template compatible
+763|                      </p>
+764|                      <p className="text-xs text-emerald-700 mt-0.5">
+765|                        Course &quot;{selectedCourse.code}&quot; provides exactly {EXACT_MODULE_COUNT} active modules —
+766|                        matches the 4-column fixed layout of certificate v2.
+767|                      </p>
+768|                    </div>
+769|                  ) : (
+770|                    <div className="border-2 border-amber-400 bg-amber-50 rounded-lg p-3">
+771|                      <p className="text-sm font-semibold text-amber-900 flex items-center gap-1.5">
+772|                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-[11px]">!</span>
+773|                        Template incompatibility — Issue blocked
+774|                      </p>
+775|                      <p className="text-xs text-amber-800 mt-1.5 font-medium">
+776|                        Course &quot;{selectedCourse.code}&quot; contains {formData.modules.length} active module{formData.modules.length !== 1 ? "s" : ""}.
+777|                        The current certificate design (v2) supports exactly {EXACT_MODULE_COUNT} modules.
+778|                      </p>
+779|                      <ul className="mt-2 space-y-1 text-xs text-amber-700 list-disc list-inside">
+780|                        {formData.modules.length < EXACT_MODULE_COUNT && (
+781|                          <li>
+782|                            {EXACT_MODULE_COUNT - formData.modules.length} additional module
+783|                            {EXACT_MODULE_COUNT - formData.modules.length !== 1 ? "s are" : " is"}
+784|                            required.
+785|                          </li>
+786|                        )}
+787|                        {formData.modules.length > EXACT_MODULE_COUNT && (
+788|                          <li>
+789|                            {formData.modules.length - EXACT_MODULE_COUNT} extra module
+790|                            {formData.modules.length - EXACT_MODULE_COUNT !== 1 ? "s must" : " must"}
+791|                            be removed or merged.
+792|                          </li>
+793|                        )}
+794|                        <li>
+795|                          Alternatively, choose an approved alternate template that supports{" "}
+796|                          {formData.modules.length}-module layouts.
+797|                        </li>
+798|                      </ul>
+799|                      <p className="mt-2 text-[11px] text-amber-600 font-semibold uppercase tracking-wide">
+800|                        ⛔ Issue flow will reject this configuration server-side.
+801|                      </p>
+802|                    </div>
+803|                  )
+804|                )}
+805|              </div>
+806|            )}
+807|          </div>
+808|
+809|          <div className="card card-body space-y-5">
+810|            <div className="flex items-start justify-between border-b pb-3 gap-4">
+811|              <div>
+812|                <h2 className="font-semibold text-gray-900">Program &amp; Modules</h2>
+813|                {selectedCourse && (
+814|                  <p className="text-xs text-emerald-600 mt-0.5 inline-flex items-center gap-1">
+815|                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+816|                    Locked from course &quot;{selectedCourse.code}&quot; — change course above to edit these values.
+817|                  </p>
+818|                )}
+819|              </div>
+820|            </div>
+821|            <p className="text-xs text-gray-500 -mt-3">
+822|              {selectedCourse
+823|                ? "Values are auto-filled from the course catalog and read-only below. Select a different course or clear selection to edit."
+824|                : "Enter program details manually, or select a course above for auto-fill."}
+825|            </p>
+826|            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+827|              <div className="sm:col-span-2">
+828|                <label className="label flex items-center gap-2">
+829|                  Program Title *
+830|                  {selectedCourse && (
+831|                    <span className="text-[10px] uppercase tracking-wide text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 font-semibold">
+832|                      from course
+833|                    </span>
+834|                  )}
+835|                </label>
+836|                <input
+837|                  type="text"
+838|                  className={`input ${selectedCourse ? "bg-gray-50 text-gray-600 cursor-not-allowed" : ""}`}
+839|                  value={formData.program.title}
+840|                  onChange={(e) =>
+841|                    !selectedCourse &&
+842|                    setFormData({ ...formData, program: { ...formData.program, title: e.target.value } })
+843|                  }
+844|                  placeholder="e.g. Professional Computer & Digital Skills Program"
+845|                  maxLength={200}
+846|                  disabled={!!selectedCourse}
+847|                  readOnly={!!selectedCourse}
+848|                />
+849|              </div>
+850|              <div>
+851|                <label className="label flex items-center gap-2">
+852|                  Duration *
+853|                  {selectedCourse && (
+854|                    <span className="text-[10px] uppercase tracking-wide text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 font-semibold">
+855|                      from course
+856|                    </span>
+857|                  )}
+858|                </label>
+859|                <input
+860|                  type="text"
+861|                  className={`input ${selectedCourse ? "bg-gray-50 text-gray-600 cursor-not-allowed" : ""}`}
+862|                  value={formData.program.duration}
+863|                  onChange={(e) =>
+864|                    !selectedCourse &&
+865|                    setFormData({ ...formData, program: { ...formData.program, duration: e.target.value } })
+866|                  }
+867|                  placeholder="e.g. 3 Months"
+868|                  maxLength={50}
+869|                  disabled={!!selectedCourse}
+870|                  readOnly={!!selectedCourse}
+871|                />
+872|              </div>
+873|            </div>
+874|
+875|            <div>
+876|              <div className="flex items-center justify-between mb-3">
+877|                <label className="label mb-0 flex items-center gap-2">
+878|                  Course Modules ({formData.modules.length}/{EXACT_MODULE_COUNT}) *
+879|                  {selectedCourse && (
+880|                    <span className="text-[10px] uppercase tracking-wide text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 font-semibold">
+881|                      {formData.modules.length} active
+882|                    </span>
+883|                  )}
+884|                </label>
+885|                <button
+886|                  type="button"
+887|                  onClick={addModule}
+888|                  disabled={!!selectedCourse || formData.modules.length >= EXACT_MODULE_COUNT}
+889|                  className="btn-secondary text-xs py-1 px-3 disabled:opacity-40 disabled:cursor-not-allowed"
+890|                >
+891|                  + Add Module
+892|                </button>
+893|              </div>
+894|              <p className="text-xs text-gray-500 mb-3">
+895|                Exactly {EXACT_MODULE_COUNT} modules are required for the v2 4-column certificate template.
+896|                {selectedCourse && (
+897|                  <span className="block mt-1 text-emerald-600">
+898|                    Modules and their order are sourced from the canonical course catalog and cannot be manually edited.
+899|                  </span>
+900|                )}
+901|              </p>
+902|              {formData.modules.length === 0 && (
+903|                <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center text-gray-400 text-sm">
+904|                  No modules added. Click &quot;Add Module&quot; or select a preset course above.
+905|                </div>
+906|              )}
+907|              <div className="space-y-3">
+908|                {formData.modules.map((mod: CertificateModule, idx: number) => (
+909|                  <div
+910|                    key={idx}
+911|                    className={`border rounded-lg p-3 ${
+912|                      selectedCourse
+913|                        ? "border-emerald-200 bg-emerald-50/40"
+914|                        : "border-gray-200 bg-gray-50"
+915|                    }`}
+916|                  >
+917|                    <div className="flex items-center justify-between mb-2">
+918|                      <span
+919|                        className={`text-xs font-semibold ${
+920|                          selectedCourse ? "text-emerald-700" : "text-gray-500"
+921|                        }`}
+922|                      >
+923|                        Module #{idx + 1}
+924|                      </span>
+925|                      <div className="flex items-center gap-1">
+926|                        <button
+927|                          type="button"
+928|                          onClick={() => moveModule(idx, -1)}
+929|                          disabled={!!selectedCourse || idx === 0}
+930|                          className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
+931|                          title="Move up"
+932|                        >
+933|                          ↑
+934|                        </button>
+935|                        <button
+936|                          type="button"
+937|                          onClick={() => moveModule(idx, 1)}
+938|                          disabled={!!selectedCourse || idx === formData.modules.length - 1}
+939|                          className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
+940|                          title="Move down"
+941|                        >
+942|                          ↓
+943|                        </button>
+944|                        <button
+945|                          type="button"
+946|                          onClick={() => removeModule(idx)}
+947|                          disabled={!!selectedCourse}
+948|                          className={`p-1 ml-1 ${
+949|                            selectedCourse
+950|                              ? "text-gray-300 cursor-not-allowed"
+951|                              : "text-red-400 hover:text-red-600"
+952|                          }`}
+953|                          title="Remove module"
+954|                        >
+955|                          ✕
+956|                        </button>
+957|                      </div>
+958|                    </div>
+959|                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+960|                      <input
+961|                        type="text"
+962|                        className={`input ${
+963|                          selectedCourse ? "bg-white text-gray-700 cursor-not-allowed border-emerald-200" : ""
+964|                        }`}
+965|                        placeholder={`Module ${idx + 1} Title *`}
+966|                        value={mod.title}
+967|                        onChange={(e) => updateModule(idx, "title", e.target.value)}
+968|                        maxLength={45}
+969|                        disabled={!!selectedCourse}
+970|                        readOnly={!!selectedCourse}
+971|                      />
+972|                      <input
+973|                        type="text"
+974|                        className={`input ${
+975|                          selectedCourse ? "bg-white text-gray-700 cursor-not-allowed border-emerald-200" : ""
+976|                        }`}
+977|                        placeholder="Subtitle / Description"
+978|                        value={mod.subtitle || ""}
+979|                        onChange={(e) => updateModule(idx, "subtitle", e.target.value)}
+980|                        maxLength={80}
+981|                        disabled={!!selectedCourse}
+982|                        readOnly={!!selectedCourse}
+983|                      />
+984|                    </div>
+985|                  </div>
+986|                ))}
+987|              </div>
+988|            </div>
+989|          </div>
+990|
+991|          <div className="card card-body space-y-5">
+992|            <h2 className="font-semibold text-gray-900 border-b pb-3">Results &amp; Dates</h2>
+993|            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+994|              <div>
+995|                <label className="label">Grade / Result (optional)</label>
+996|                <select
+997|                  className="input"
+998|                  value={formData.grade || ""}
+999|                  onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
+1000|                >
+1001|                  <option value="">— Not displayed —</option>
+1002|                  {["A+", "A", "B+", "B", "C+", "C", "D", "PASS", "FAIL"].map((g) => (
+1003|                    <option key={g} value={g}>{g}</option>
+1004|                  ))}
+1005|                </select>
+1006|              </div>
+1007|              <div>
+1008|                <label className="label">Completion Date (optional)</label>
+1009|                <input
+1010|                  type="date"
+1011|                  className="input"
+1012|                  value={formData.completionDate || ""}
+1013|                  onChange={(e) => setFormData({ ...formData, completionDate: e.target.value })}
+1014|                />
+1015|              </div>
+1016|              <div>
+1017|                <label className="label">Issue Date *</label>
+1018|                <input
+1019|                  type="date"
+1020|                  className="input"
+1021|                  value={formData.issueDate}
+1022|                  onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
+1023|                  required
+1024|                />
+1025|              </div>
+1026|            </div>
+1027|          </div>
+1028|
+1029|          <div className="card card-body space-y-5">
+1030|            <div className="flex items-center justify-between border-b pb-3">
+1031|              <h2 className="font-semibold text-gray-900">Authorized Signatory</h2>
+1032|              {!loadingSignatories && signatories.length > 0 && (
+1033|                <select className="input w-auto py-1 text-xs" onChange={(e) => handleSignatorySelect(e.target.value)} defaultValue="">
+1034|                  <option value="">Select signatory...</option>
+1035|                  {signatories.map((s) => (
+1036|                    <option key={s.id} value={s.id}>{s.name} — {s.position}</option>
+1037|                  ))}
+1038|                </select>
+1039|              )}
+1040|            </div>
+1041|            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+1042|              <div>
+1043|                <label className="label">Signatory Name *</label>
+1044|                <input
+1045|                  type="text"
+1046|                  className="input"
+1047|                  value={formData.signatory.name}
+1048|                  onChange={(e) => setFormData({ ...formData, signatory: { ...formData.signatory, name: e.target.value } })}
+1049|                  placeholder="Full name of authorized signatory"
+1050|                />
+1051|              </div>
+1052|              <div>
+1053|                <label className="label">Signatory Position *</label>
+1054|                <input
+1055|                  type="text"
+1056|                  className="input"
+1057|                  value={formData.signatory.position}
+1058|                  onChange={(e) => setFormData({ ...formData, signatory: { ...formData.signatory, position: e.target.value } })}
+1059|                  placeholder="e.g. Director, DarbarTech Group"
+1060|                />
+1061|              </div>
+1062|            </div>
+1063|          </div>
+1064|
+1065|          <div className="card card-body space-y-5">
+1066|            <div className="flex items-center justify-between border-b pb-3">
+1067|              <h2 className="font-semibold text-gray-900">Secondary Signatory (Managing Director)</h2>
+1068|              {!loadingSignatories && signatories.length > 0 && (
+1069|                <select className="input w-auto py-1 text-xs" onChange={(e) => handleSecondarySignatorySelect(e.target.value)} defaultValue="">
+1070|                  <option value="">Select signatory...</option>
+1071|                  {signatories.map((s) => (
+1072|                    <option key={s.id} value={s.id}>{s.name} — {s.position}</option>
+1073|                  ))}
+1074|                </select>
+1075|              )}
+1076|            </div>
+1077|            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+1078|              <div>
+1079|                <label className="label">Secondary Signatory Name *</label>
+1080|                <input
+1081|                  type="text"
+1082|                  className="input"
+1083|                  value={formData.secondarySignatory?.name || ""}
+1084|                  onChange={(e) =>
+1085|                    setFormData({ ...formData, secondarySignatory: { ...(formData.secondarySignatory || { name: "", position: "" }), name: e.target.value } })
+1086|                  }
+1087|                  placeholder="Full name of secondary signatory"
+1088|                />
+1089|              </div>
+1090|              <div>
+1091|                <label className="label">Secondary Signatory Position *</label>
+1092|                <input
+1093|                  type="text"
+1094|                  className="input"
+1095|                  value={formData.secondarySignatory?.position || ""}
+1096|                  onChange={(e) =>
+1097|                    setFormData({ ...formData, secondarySignatory: { ...(formData.secondarySignatory || { name: "", position: "" }), position: e.target.value } })
+1098|                  }
+1099|                  placeholder="e.g. Managing Director"
+1100|                />
+1101|              </div>
+1102|            </div>
+1103|          </div>
+1104|        </div>
+1105|
+1106|        <div className="space-y-6">
+1107|          <div className="card card-body sticky top-24 space-y-4">
+1108|            <h3 className="font-semibold text-gray-900">Quick Actions</h3>
+1109|            <p className="text-xs text-gray-500">
+1110|              Review and validate your form, then generate a preview before issuing.
+1111|            </p>
+1112|            <div className="flex flex-col gap-2">
+1113|              <button type="submit" className="btn-primary w-full">
+1114|                📄 Generate Preview
+1115|              </button>
+1116|              <Link href="/admin/certificates" className="btn-secondary w-full text-center">
+1117|                Cancel
+1118|              </Link>
+1119|            </div>
+1120|            <div className="pt-4 border-t border-gray-100 space-y-2 text-xs">
+1121|              <div className="flex justify-between text-gray-500">
+1122|                <span>Template</span>
+1123|                <span className="font-mono">darbartech v1.0.0</span>
+1124|              </div>
+1125|              <div className="flex justify-between text-gray-500">
+1126|                <span>Page</span>
+1127|                <span>A4 Landscape, 300 PPI</span>
+1128|              </div>
+1129|              <div className="flex justify-between text-gray-500">
+1130|                <span>Output</span>
+1131|                <span>Print-ready PDF</span>
+1132|              </div>
+1133|            </div>
+1134|          </div>
+1135|        </div>
+1136|      </div>
+1137|    </form>
+1138|  );
+1139|}
+1140|

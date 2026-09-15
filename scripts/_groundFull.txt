@@ -1,0 +1,429 @@
+=== IMPORTS + EXACT consts (lines 1-75, file src/app/admin/certificates/new/page.tsx, total 1140) ===
+1|"use client";
+2|
+3|import { useState, useEffect, FormEvent, useRef, useCallback } from "react";
+4|import Link from "next/link";
+5|import apiClient from "@/lib/api/client";
+6|import { getCurrentDateStr } from "@/lib/renderer/dateFormatter";
+7|import type {
+8|  CertificateCreateInput,
+9|  CertificateModule,
+10|  AdminUser,
+11|  SignatoryRecord,
+12|  CourseRecord,
+13|  CourseModuleRecord,
+14|  CertificateRecord,
+15|} from "@/lib/types";
+16|
+17|const EXACT_MODULE_COUNT = 4;
+18|
+19|type CreateStage = "form" | "preview" | "success";
+20|
+21|// Converts a "data:<mime>;base64,<data>" string into a Blob object URL.
+22|// Blob URLs don't have the ~2MB character limit that data URIs hit when
+23|// used as an <iframe src> in Chrome, which causes large PDFs to silently
+24|// fail to render.
+25|function base64DataUriToBlobUrl(dataUri: string): string {
+26|  const [header, base64] = dataUri.split(",");
+27|  const mimeMatch = header.match(/data:(.*);base64/);
+28|  const mimeType = mimeMatch?.[1] || "application/pdf";
+29|
+30|  const byteChars = atob(base64);
+31|  const byteNumbers = new Array(byteChars.length);
+32|  for (let i = 0; i < byteChars.length; i++) {
+33|    byteNumbers[i] = byteChars.charCodeAt(i);
+34|  }
+35|  const byteArray = new Uint8Array(byteNumbers);
+36|  const blob = new Blob([byteArray], { type: mimeType });
+37|  return URL.createObjectURL(blob);
+38|}
+39|
+40|export default function CreateCertificatePage() {
+41|  const [stage, setStage] = useState<CreateStage>("form");
+42|  const [loadingCourses, setLoadingCourses] = useState(true);
+43|  const [coursesError, setCoursesError] = useState<string | null>(null);
+44|  const [loadingSignatories, setLoadingSignatories] = useState(true);
+45|  const [courses, setCourses] = useState<(CourseRecord & { modules: CourseModuleRecord[] })[]>([]);
+46|  const [signatories, setSignatories] = useState<SignatoryRecord[]>([]);
+47|  const [previewPdf, setPreviewPdf] = useState<string | null>(null);
+48|  const [previewLoading, setPreviewLoading] = useState(false);
+49|  const [previewErrors, setPreviewErrors] = useState<string[]>([]);
+50|  const [issueLoading, setIssueLoading] = useState(false);
+51|  const [formErrors, setFormErrors] = useState<string[]>([]);
+52|  const [issuedCert, setIssuedCert] = useState<CertificateRecord | null>(null);
+53|  const [draftId, setDraftId] = useState<string | null>(null);
+54|  const [user, setUser] = useState<AdminUser | null>(null);
+55|  const [selectedCourseId, setSelectedCourseId] = useState<string>("");
+56|
+57|  const [formData, setFormData] = useState<CertificateCreateInput & {
+58|    certificateTemplateId?: string;
+59|    certificateTemplateVersion?: string;
+60|    providerName?: string;
+61|    completionStatement?: string;
+62|  }>({
+63|    recipient: { name: "" },
+64|    program: { title: "", duration: "", id: "", code: "" },
+65|    modules: [],
+66|    grade: "",
+67|    completionDate: "",
+68|    issueDate: getCurrentDateStr(),
+69|    signatory: { name: "", position: "", id: "" },
+70|    secondarySignatory: { name: "Nirmala Shrestha", position: "Managing Director", id: "" },
+71|    certificateTemplateId: "",
+72|    certificateTemplateVersion: "",
+73|    providerName: "",
+74|    completionStatement: "",
+75|  });
+
+=== QUICKFILL→GUARD→PREVIEW/ISSUE (lines 255-425, file src/app/admin/certificates/new/page.tsx, total 1140) ===
+255|      if (target < 0 || target >= modules.length) return prev;
+256|      [modules[idx], modules[target]] = [modules[target], modules[idx]];
+257|      return {
+258|        ...prev,
+259|        modules: modules.map((m: CertificateModule, i: number) => ({ ...m, order: i + 1 })),
+260|      };
+261|    });
+262|  };
+263|
+264|  const generatePreview = async () => {
+265|    setPreviewLoading(true);
+266|    setPreviewErrors([]);
+267|    setFormErrors([]);
+268|    try {
+269|      const result = await apiClient.generatePreview(formData);
+270|      if (result.success && result.preview) {
+271|        // The API returns a base64 data URI. For anything but tiny PDFs this
+272|        // can exceed Chrome's ~2,097,152-character URL length limit when used
+273|        // directly as an <iframe src>, causing it to silently fail to render
+274|        // (no console error, just a blank frame). Converting to a Blob URL
+275|        // avoids that limit entirely.
+276|        const blobUrl = base64DataUriToBlobUrl(result.preview);
+277|        setPreviewPdf((prev) => {
+278|          if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+279|          return blobUrl;
+280|        });
+281|        setPreviewErrors(result.warnings || []);
+282|      } else {
+283|        setPreviewErrors(result.errors || ["Preview generation failed"]);
+284|      }
+285|    } catch (err) {
+286|      setPreviewErrors([err instanceof Error ? err.message : "Preview error"]);
+287|    } finally {
+288|      setPreviewLoading(false);
+289|    }
+290|  };
+291|
+292|  const validateForm = (): string[] => {
+293|    const errs: string[] = [];
+294|    if (!formData.recipient.name.trim()) errs.push("Recipient name is required");
+295|    if (!formData.program.title.trim()) errs.push("Program title is required");
+296|    if (!formData.program.duration.trim()) errs.push("Program duration is required");
+297|    if (formData.modules.length !== EXACT_MODULE_COUNT) {
+298|      errs.push(
+299|        `Exactly ${EXACT_MODULE_COUNT} modules are required for the certificate template v2. Current count: ${formData.modules.length}.`
+300|      );
+301|    }
+302|    formData.modules.forEach((m: CertificateModule, i: number) => {
+303|      if (!m.title.trim()) errs.push(`Module ${i + 1}: title is required`);
+304|    });
+305|    if (!formData.issueDate) errs.push("Issue date is required");
+306|    if (!formData.signatory.name.trim()) errs.push("Signatory name is required");
+307|    if (!formData.signatory.position.trim()) errs.push("Signatory position is required");
+308|    if (!formData.secondarySignatory?.name?.trim()) errs.push("Secondary Signatory name is required");
+309|    if (!formData.secondarySignatory?.position?.trim()) errs.push("Secondary Signatory position is required");
+310|    return errs;
+311|  };
+312|
+313|  const goToPreview = async (e: FormEvent) => {
+314|    e.preventDefault();
+315|    const errs = validateForm();
+316|    if (errs.length > 0) {
+317|      setFormErrors(errs);
+318|      return;
+319|    }
+320|    setFormErrors([]);
+321|    const draftResult = await apiClient.createDraftCertificate(formData);
+322|    if (draftResult.success && draftResult.certificate) {
+323|      setDraftId(draftResult.certificate.id);
+324|    }
+325|    setStage("preview");
+326|    await generatePreview();
+327|  };
+328|
+329|  const handleIssue = async () => {
+330|    if (!draftId) {
+331|      const draftResult = await apiClient.createDraftCertificate(formData);
+332|      if (!draftResult.success || !draftResult.certificate) {
+333|        setPreviewErrors(draftResult.errors || ["Could not create draft"]);
+334|        return;
+335|      }
+336|      setDraftId(draftResult.certificate.id);
+337|    }
+338|
+339|    setIssueLoading(true);
+340|    setPreviewErrors([]);
+341|    try {
+342|      const result = await apiClient.issueCertificate(draftId!, formData);
+343|      if (result.success && result.certificate) {
+344|        setIssuedCert(result.certificate as CertificateRecord);
+345|        setStage("success");
+346|      } else {
+347|        setPreviewErrors(result.errors || ["Issuance failed"]);
+348|      }
+349|    } catch (err) {
+350|      setPreviewErrors([err instanceof Error ? err.message : "Issuance error"]);
+351|    } finally {
+352|      setIssueLoading(false);
+353|    }
+354|  };
+355|
+356|  const canIssue = user?.permissions.issue || user?.role === "super_admin";
+357|
+358|  if (stage === "success" && issuedCert) {
+359|    return (
+360|      <div className="max-w-2xl mx-auto">
+361|        <div className="card card-body text-center py-12">
+362|          <div className="w-20 h-20 mx-auto rounded-full bg-emerald-100 flex items-center justify-center mb-6">
+363|            <svg className="w-10 h-10 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+364|              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+365|            </svg>
+366|          </div>
+367|          <h1 className="text-2xl font-bold text-gray-900 mb-2">Certificate Issued!</h1>
+368|          <p className="text-gray-500 mb-8">
+369|            The certificate has been successfully issued and is available for verification.
+370|          </p>
+371|          <div className="bg-gray-50 rounded-lg p-6 mb-8 text-left max-w-md mx-auto">
+372|            <div className="space-y-3 text-sm">
+373|              <div className="flex justify-between">
+374|                <span className="text-gray-500">Certificate No.</span>
+375|                <span className="font-mono font-semibold text-brand-navy">{issuedCert.certificate_number}</span>
+376|              </div>
+377|              <div className="flex justify-between">
+378|                <span className="text-gray-500">Recipient</span>
+379|                <span className="font-medium">{issuedCert.recipient_name}</span>
+380|              </div>
+381|              {issuedCert.student_id && (
+382|                <div className="flex justify-between">
+383|                  <span className="text-gray-500">Student ID</span>
+384|                  <span className="font-mono font-medium">{issuedCert.student_id}</span>
+385|                </div>
+386|              )}
+387|              <div className="flex justify-between">
+388|                <span className="text-gray-500">Program</span>
+389|                <span className="font-medium">{issuedCert.program_title}</span>
+390|              </div>
+391|              <div className="flex justify-between">
+392|                <span className="text-gray-500">Status</span>
+393|                <span className="badge badge-issued">ISSUED</span>
+394|              </div>
+395|            </div>
+396|          </div>
+397|          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+398|            <Link href="/admin/certificates" className="btn-primary px-6 w-full sm:w-auto">
+399|              ← Back to Certificates
+400|            </Link>
+401|            <button
+402|              onClick={() => apiClient.downloadCertificate(issuedCert.id)}
+403|              className="btn-secondary px-6 w-full sm:w-auto"
+404|            >
+405|              Download PDF
+406|            </button>
+407|            <a
+408|              href={`/verify/${issuedCert.verification_token}`}
+409|              target="_blank"
+410|              rel="noopener noreferrer"
+411|              className="btn-gold px-6 w-full sm:w-auto"
+412|            >
+413|              View Verification
+414|            </a>
+415|          </div>
+416|        </div>
+417|      </div>
+418|    );
+419|  }
+420|
+421|  if (stage === "preview") {
+422|    return (
+423|      <div className="space-y-6">
+424|        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+425|          <div>
+
+=== COURSE SELECT MAPPING + UI issues block (lines 700-815, file src/app/admin/certificates/new/page.tsx, total 1140) ===
+700|                        <p className="text-xs text-emerald-600">Course Code</p>
+701|                        <p className="font-mono font-medium text-emerald-900">{selectedCourse.code}</p>
+702|                      </div>
+703|                      <div>
+704|                        <p className="text-xs text-emerald-600">Duration</p>
+705|                        <p className="font-medium text-emerald-900">{selectedCourse.duration}</p>
+706|                      </div>
+707|                      <div className="col-span-2">
+708|                        <p className="text-xs text-emerald-600">Program Title</p>
+709|                        <p className="font-medium text-emerald-900">
+710|                          {selectedCourse.certificateTitle || selectedCourse.title}
+711|                        </p>
+712|                      </div>
+713|                      {selectedCourse.providerName && (
+714|                        <div className="col-span-2">
+715|                          <p className="text-xs text-emerald-600">Provider / Issuer</p>
+716|                          <p className="font-medium text-emerald-900">{selectedCourse.providerName}</p>
+717|                        </div>
+718|                      )}
+719|                      {selectedCourse.certificateTemplateId && (
+720|                        <div>
+721|                          <p className="text-xs text-emerald-600">Template</p>
+722|                          <p className="font-mono text-xs text-emerald-900">
+723|                            {selectedCourse.certificateTemplateId}
+724|                            {selectedCourse.certificateTemplateVersion
+725|                              ? ` v${selectedCourse.certificateTemplateVersion}`
+726|                              : ""}
+727|                          </p>
+728|                        </div>
+729|                      )}
+730|                      <div>
+731|                        <p className="text-xs text-emerald-600">Active Modules</p>
+732|                        <p
+733|                          className={`font-medium ${
+734|                            formData.modules.length === EXACT_MODULE_COUNT
+735|                              ? "text-emerald-900"
+736|                              : "text-amber-800"
+737|                          }`}
+738|                        >
+739|                          {selectedCourse.modules.filter((m) => m.active !== false).length}
+740|                          {formData.modules.length !== EXACT_MODULE_COUNT && (
+741|                            <span className="text-[10px] uppercase tracking-wide ml-1 text-amber-700 bg-amber-100 border border-amber-200 rounded px-1 py-0.5">
+742|                              mismatch
+743|                            </span>
+744|                          )}
+745|                        </p>
+746|                      </div>
+747|                      {selectedCourse.completionStatement && (
+748|                        <div className="col-span-2">
+749|                          <p className="text-xs text-emerald-600">Completion Statement</p>
+750|                          <p className="text-sm text-emerald-900">{selectedCourse.completionStatement}</p>
+751|                        </div>
+752|                      )}
+753|                    </div>
+754|                  </div>
+755|                )}
+756|
+757|                {selectedCourse && (
+758|                  isTemplateCompatible ? (
+759|                    <div className="border border-emerald-300 bg-emerald-50 rounded-lg p-3">
+760|                      <p className="text-sm font-semibold text-emerald-800 flex items-center gap-1.5">
+761|                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-500 text-white text-[10px]">✓</span>
+762|                        Template compatible
+763|                      </p>
+764|                      <p className="text-xs text-emerald-700 mt-0.5">
+765|                        Course &quot;{selectedCourse.code}&quot; provides exactly {EXACT_MODULE_COUNT} active modules —
+766|                        matches the 4-column fixed layout of certificate v2.
+767|                      </p>
+768|                    </div>
+769|                  ) : (
+770|                    <div className="border-2 border-amber-400 bg-amber-50 rounded-lg p-3">
+771|                      <p className="text-sm font-semibold text-amber-900 flex items-center gap-1.5">
+772|                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-[11px]">!</span>
+773|                        Template incompatibility — Issue blocked
+774|                      </p>
+775|                      <p className="text-xs text-amber-800 mt-1.5 font-medium">
+776|                        Course &quot;{selectedCourse.code}&quot; contains {formData.modules.length} active module{formData.modules.length !== 1 ? "s" : ""}.
+777|                        The current certificate design (v2) supports exactly {EXACT_MODULE_COUNT} modules.
+778|                      </p>
+779|                      <ul className="mt-2 space-y-1 text-xs text-amber-700 list-disc list-inside">
+780|                        {formData.modules.length < EXACT_MODULE_COUNT && (
+781|                          <li>
+782|                            {EXACT_MODULE_COUNT - formData.modules.length} additional module
+783|                            {EXACT_MODULE_COUNT - formData.modules.length !== 1 ? "s are" : " is"}
+784|                            required.
+785|                          </li>
+786|                        )}
+787|                        {formData.modules.length > EXACT_MODULE_COUNT && (
+788|                          <li>
+789|                            {formData.modules.length - EXACT_MODULE_COUNT} extra module
+790|                            {formData.modules.length - EXACT_MODULE_COUNT !== 1 ? "s must" : " must"}
+791|                            be removed or merged.
+792|                          </li>
+793|                        )}
+794|                        <li>
+795|                          Alternatively, choose an approved alternate template that supports{" "}
+796|                          {formData.modules.length}-module layouts.
+797|                        </li>
+798|                      </ul>
+799|                      <p className="mt-2 text-[11px] text-amber-600 font-semibold uppercase tracking-wide">
+800|                        ⛔ Issue flow will reject this configuration server-side.
+801|                      </p>
+802|                    </div>
+803|                  )
+804|                )}
+805|              </div>
+806|            )}
+807|          </div>
+808|
+809|          <div className="card card-body space-y-5">
+810|            <div className="flex items-start justify-between border-b pb-3 gap-4">
+811|              <div>
+812|                <h2 className="font-semibold text-gray-900">Program &amp; Modules</h2>
+813|                {selectedCourse && (
+814|                  <p className="text-xs text-emerald-600 mt-0.5 inline-flex items-center gap-1">
+815|                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+
+=== fitTextToField FULL (lines 108-165, file src/lib/renderer/textFitting.ts, total 280) ===
+108|  if (!text) return [];
+109|
+110|  const words = text.split(/\s+/);
+111|  const lines: string[] = [];
+112|  let currentLine = "";
+113|
+114|  for (const word of words) {
+115|    const testLine = currentLine ? `${currentLine} ${word}` : word;
+116|    const lineWidth = estimateTextWidth(testLine, fontSize, weight, letterSpacing, fontName);
+117|    if (lineWidth <= maxWidthPt) {
+118|      currentLine = testLine;
+119|    } else {
+120|      if (currentLine) lines.push(currentLine);
+121|      const wordWidth = estimateTextWidth(word, fontSize, weight, letterSpacing, fontName);
+122|      if (wordWidth > maxWidthPt) {
+123|        let remaining = word;
+124|        while (remaining.length > 0) {
+125|          let chunkLength = 1;
+126|          while (
+127|            chunkLength < remaining.length &&
+128|            estimateTextWidth(remaining.slice(0, chunkLength + 1), fontSize, weight, letterSpacing, fontName) <= maxWidthPt
+129|          ) {
+130|            chunkLength++;
+131|          }
+132|          lines.push(remaining.slice(0, chunkLength));
+133|          remaining = remaining.slice(chunkLength);
+134|        }
+135|        currentLine = "";
+136|      } else {
+137|        currentLine = word;
+138|      }
+139|    }
+140|  }
+141|  if (currentLine) lines.push(currentLine);
+142|
+143|  return lines;
+144|};
+145|
+146|export const fitTextToField = (
+147|  text: string,
+148|  field: TemplateField
+149|): {
+150|  fontSize: number;
+151|  lines: string[];
+152|  fits: boolean;
+153|  error?: string;
+154|} => {
+155|  const maxWidthPt = mmToPt(field.width);
+156|  const maxLines = field.maxLines;
+157|  const lineHeightRatio = field.lineHeight || 1.2;
+158|  const letterSpacing = field.letterSpacing || 0;
+159|  const fontName = field.font || "Helvetica";
+160|
+161|  let fontSize = field.fontSize;
+162|  let lines: string[] = [];
+163|  let fits = false;
+164|
+165|  while (fontSize >= field.minFontSize) {
+
+=== moduleFit.ts FULL : MISSING src/lib/renderer/moduleFit.ts ===

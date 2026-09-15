@@ -1,0 +1,7 @@
+--- renderer dir ---
+certificateRenderer.ts, dateFormatter.ts, qrGenerator.ts, textFitting.ts
+--- moduleFit? ---
+MISSING
+--- collectModuleFitWarnings def ---
+first occurrence idx=-1
+--- import lines ---

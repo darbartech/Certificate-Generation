@@ -1,0 +1,73 @@
+== src/lib/renderer/moduleFit.ts  lines=141 ==
+1|import type { TemplateConfig, TemplateField, CertificateModuleInput } from "@/lib/types";
+2|import { fitTextToField } from "./textFitting";
+3|
+4|export interface ModuleFitIssue {
+5|  order: number;
+6|  field: string;
+7|  tileLabel: string;
+8|  textToRender: string;
+9|  originalText: string;
+10|  hard: boolean;
+== src/lib/renderer/moduleFit.ts  lines=141 ==
+40|    "Montserrat-ExtraBold": 0.61,
+41|    "CormorantGaramond-Regular": 0.44,
+42|    "CormorantGaramond-Bold": 0.46,
+43|    "PlayfairDisplay-Bold": 0.48,
+44|  };
+45|  return F[fontName] ?? 0.55;
+46|};
+47|
+48|const transformUppercase = (text: string, field: TemplateField): string =>
+49|  field.transformUppercase || field.uppercase ? text.toUpperCase() : text;
+50|
+51|const describe = (
+52|  order: number,
+53|  field: string,
+54|  tileLabel: string,
+55|  text: string,
+56|  originalText: string,
+57|  hard: boolean,
+58|  reason: string
+59|): ModuleFitIssue => ({
+60|  order,
+61|  field,
+62|  tileLabel,
+63|  textToRender: text,
+64|  originalText,
+65|  hard,
+66|  reason: `${reason} (field geometry — see certificate v2 / 4-column tile layout; documented minimum font: 6.7pt title / 5.3pt subtitle).`,
+67|});
+68|
+69|/**
+70| * Pre-flight issue collector — mirrors the renderer's exact fit math against
+71| * the documented minimum font, so the admin form and the PDF renderer can
+72| * never disagree about whether a module tile fits. Empty array = the four
+73| * module tiles are geometrically safe to issue.
+74| */
+75|export const collectModuleFitIssues = (
+== src/app/admin/certificates/new/page.tsx  lines=1156 ==
+262|        modules: modules.map((m: CertificateModule, i: number) => ({ ...m, order: i + 1 })),
+263|      };
+264|    });
+265|  };
+266|
+267|  const generatePreview = async () => {
+268|    setPreviewLoading(true);
+269|    setPreviewErrors([]);
+270|    setFormErrors([]);
+271|    try {
+272|      const resolvedTpl = getTemplateById(
+273|        formData.certificateTemplateId ?? formData.certificateTemplateVersion,
+274|        formData.certificateTemplateVersion
+275|      );
+276|      const fitIssues = collectModuleFitIssues(resolvedTpl, formData.modules);
+277|      if (fitIssues.length > 0) {
+278|        setModuleFitIssues(fitIssues);
+279|        setPreviewErrors(fitIssues.map((fi) => fi.reason));
+280|        setPreviewLoading(false);
+281|        return;
+282|      }
+283|      setModuleFitIssues([]);
+284|      const result = await apiClient.generatePreview(formData);
+285|      if (result.success && result.preview) {

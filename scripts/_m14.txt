@@ -1,0 +1,132 @@
+==collect body src/lib/renderer/moduleFit.ts
+74| */
+75|export const collectModuleFitIssues = (
+76|  template: TemplateConfig,
+77|  modules: CertificateModuleInput[]
+78|): ModuleFitIssue[] => {
+79|  const issues: ModuleFitIssue[] = [];
+80|
+81|  for (const mod of modules) {
+82|    const tiles = getTileTemplate(template, mod.order);
+83|    if (!tiles) {
+84|      issues.push(
+85|        describe(
+86|          mod.order,
+87|          `module${mod.order}Title`,
+88|          `Module ${mod.order}`,
+89|          mod.title || "",
+90|          mod.title || "",
+91|          true,
+92|          `The v2 template defines module tiles 1-4 only; module order ${mod.order} has no tile. Prevent issuance (fail loud, never silently distort).`
+93|        )
+94|      );
+95|      continue;
+96|    }
+97|
+98|    const titleField = tiles.title;
+99|    const subtitleField = tiles.subtitle;
+100|    const text = transformUppercase(mod.title || "", titleField || ({} as TemplateField));
+101|
+102|    if (titleField && text) {
+103|      const fit = fitTextToField(text, titleField);
+104|      if (!fit.fits) {
+105|        issues.push(
+106|          describe(
+107|            mod.order,
+108|            titleField.field || `module${mod.order}Title`,
+109|            `Module ${mod.order} — Title`,
+110|            text,
+111|            mod.title || "",
+112|            fit.fontSize <= (titleField.minFontSize || 0) + 0.001,
+113|            `"${mod.title}" cannot render in the fixed ${titleField.width}mm tile at
+114|1 line with letterSpacing — the renderer would refuse to distort it. Shorten the module title to fit the 4-column v2 geometry.`
+115|          )
+116|        );
+117|      }
+118|    }
+119|
+120|    if (subtitleField && mod.subtitle) {
+121|      const textSub = mod.subtitle;
+122|      const fitSub = fitTextToField(textSub, subtitleField);
+123|      if (!fitSub.fits) {
+124|        issues.push(
+125|          describe(
+126|            mod.order,
+127|            subtitleField.field || `module${mod.order}Subtitle`,
+128|            `Module ${mod.order} — Subtitle`,
+129|            textSub,
+130|            mod.subtitle,
+131|            fitSub.fontSize <= (subtitleField.minFontSize || 0) + 0.001,
+132|            `"${mod.subtitle}" cannot render in the fixed ${subtitleField.width}mm subtitle tile at 1 line — the renderer would refuse to distort it. Shorten the module subtitle.`
+133|          )
+134|        );
+135|      }
+136|    }
+137|  }
+138|
+139|  return issues;
+140|};
+141|
+==imports src/lib/renderer/moduleFit.ts
+1|import type { TemplateConfig, TemplateField, CertificateModuleInput } from "@/lib/types";
+2|import { fitTextToField } from "./textFitting";
+3|
+4|export interface ModuleFitIssue {
+5|  order: number;
+6|  field: string;
+7|  tileLabel: string;
+8|  textToRender: string;
+9|  originalText: string;
+10|  hard: boolean;
+==getTemplateById sig region src/lib/templates/darbartech-certificate-v2.ts
+490|    letterSpacing: 0,
+491|    maxLines: 1,
+492|    minFontSize: 5.3,
+493|    overflowPolicy: "shrink_then_reject" as const,
+494|    required: false,
+495|  },
+496|  module3Subtitle: {
+497|    field: "module3Subtitle",
+498|    type: "text" as const,
+499|    x: 154.6,
+500|    y: 133.7,
+501|    width: 55.1,
+502|    height: 2.6,
+503|    font: "Montserrat-SemiBold",
+504|    fontSize: 8,
+505|    weight: "600",
+506|    color: "#1669B2",
+507|    alignment: "center" as const,
+508|    letterSpacing: 0,
+509|    maxLines: 1,
+510|    minFontSize: 5.3,
+511|    overflowPolicy: "shrink_then_reject" as const,
+512|    required: false,
+513|  },
+514|  module4Subtitle: {
+515|    field: "module4Subtitle",
+516|    type: "text" as const,
+517|    x: 224.2,
+518|    y: 133.7,
+519|    width: 51.5,
+520|    height: 2.7,
+521|    font: "Montserrat-SemiBold",
+522|    fontSize: 8,
+523|    weight: "600",
+524|    color: "#1669B2",
+525|    alignment: "center" as const,
+526|    letterSpacing: 0,
+527|    maxLines: 1,
+528|    minFontSize: 5.3,
+529|    overflowPolicy: "shrink_then_reject" as const,
+530|    required: false,
+531|  },
+532|  completionStatement: {
+533|    field: "completionStatement",
+534|    type: "text" as const,
+535|    x: 64.3,
+536|    y: 142.3,
+537|    width: 168.1,
+538|    height: 8.2,
+539|    font: "Montserrat-Regular",
+540|    fontSize: 10,

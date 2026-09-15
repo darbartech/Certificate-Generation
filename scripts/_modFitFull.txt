@@ -1,0 +1,141 @@
+1|import type { TemplateConfig, TemplateField, CertificateModuleInput } from "@/lib/types";
+2|import { fitTextToField } from "./textFitting";
+3|
+4|export interface ModuleFitIssue {
+5|  order: number;
+6|  field: string;
+7|  tileLabel: string;
+8|  textToRender: string;
+9|  originalText: string;
+10|  hard: boolean;
+11|  reason: string;
+12|}
+13|
+14|const MODULE_TILE_FIELDS = [
+15|  { order: 1, title: "module1Title", subtitle: "module1Subtitle" },
+16|  { order: 2, title: "module2Title", subtitle: "module2Subtitle" },
+17|  { order: 3, title: "module3Title", subtitle: "module3Subtitle" },
+18|  { order: 4, title: "module4Title", subtitle: "module4Subtitle" },
+19|] as const;
+20|
+21|const getTileTemplate = (
+22|  template: TemplateConfig,
+23|  order: number
+24|): { title: TemplateField | null; subtitle: TemplateField | null } | null => {
+25|  const def = MODULE_TILE_FIELDS.find((t) => t.order === order);
+26|  if (!def) return null;
+27|  const f = template.fields || {};
+28|  return {
+29|    title: f[def.title] || null,
+30|    subtitle: f[def.subtitle] || null,
+31|  };
+32|};
+33|
+34|const getFontWidthFactor = (fontName: string): number => {
+35|  const F: Record<string, number> = {
+36|    "Montserrat-Regular": 0.54,
+37|    "Montserrat-Medium": 0.55,
+38|    "Montserrat-SemiBold": 0.57,
+39|    "Montserrat-Bold": 0.59,
+40|    "Montserrat-ExtraBold": 0.61,
+41|    "CormorantGaramond-Regular": 0.44,
+42|    "CormorantGaramond-Bold": 0.46,
+43|    "PlayfairDisplay-Bold": 0.48,
+44|  };
+45|  return F[fontName] ?? 0.55;
+46|};
+47|
+48|const transformUppercase = (text: string, field: TemplateField): string =>
+49|  field.transformUppercase || field.uppercase ? text.toUpperCase() : text;
+50|
+51|const describe = (
+52|  order: number,
+53|  field: string,
+54|  tileLabel: string,
+55|  text: string,
+56|  originalText: string,
+57|  hard: boolean,
+58|  reason: string
+59|): ModuleFitIssue => ({
+60|  order,
+61|  field,
+62|  tileLabel,
+63|  textToRender: text,
+64|  originalText,
+65|  hard,
+66|  reason: `${reason} (field geometry — see certificate v2 / 4-column tile layout; documented minimum font: 6.7pt title / 5.3pt subtitle).`,
+67|});
+68|
+69|/**
+70| * Pre-flight issue collector — mirrors the renderer's exact fit math against
+71| * the documented minimum font, so the admin form and the PDF renderer can
+72| * never disagree about whether a module tile fits. Empty array = the four
+73| * module tiles are geometrically safe to issue.
+74| */
+75|export const collectModuleFitIssues = (
+76|  template: TemplateConfig,
+77|  modules: CertificateModuleInput[]
+78|): ModuleFitIssue[] => {
+79|  const issues: ModuleFitIssue[] = [];
+80|
+81|  for (const mod of modules) {
+82|    const tiles = getTileTemplate(template, mod.order);
+83|    if (!tiles) {
+84|      issues.push(
+85|        describe(
+86|          mod.order,
+87|          `module${mod.order}Title`,
+88|          `Module ${mod.order}`,
+89|          mod.title || "",
+90|          mod.title || "",
+91|          true,
+92|          `The v2 template defines module tiles 1-4 only; module order ${mod.order} has no tile. Prevent issuance (fail loud, never silently distort).`
+93|        )
+94|      );
+95|      continue;
+96|    }
+97|
+98|    const titleField = tiles.title;
+99|    const subtitleField = tiles.subtitle;
+100|    const text = transformUppercase(mod.title || "", titleField || ({} as TemplateField));
+101|
+102|    if (titleField && text) {
+103|      const fit = fitTextToField(text, titleField);
+104|      if (!fit.fits) {
+105|        issues.push(
+106|          describe(
+107|            mod.order,
+108|            titleField.field || `module${mod.order}Title`,
+109|            `Module ${mod.order} — Title`,
+110|            text,
+111|            mod.title || "",
+112|            fit.fontSize <= (titleField.minFontSize || 0) + 0.001,
+113|            `"${mod.title}" cannot render in the fixed ${titleField.width}mm tile at
+114|1 line with letterSpacing — the renderer would refuse to distort it. Shorten the module title to fit the 4-column v2 geometry.`
+115|          )
+116|        );
+117|      }
+118|    }
+119|
+120|    if (subtitleField && mod.subtitle) {
+121|      const textSub = mod.subtitle;
+122|      const fitSub = fitTextToField(textSub, subtitleField);
+123|      if (!fitSub.fits) {
+124|        issues.push(
+125|          describe(
+126|            mod.order,
+127|            subtitleField.field || `module${mod.order}Subtitle`,
+128|            `Module ${mod.order} — Subtitle`,
+129|            textSub,
+130|            mod.subtitle,
+131|            fitSub.fontSize <= (subtitleField.minFontSize || 0) + 0.001,
+132|            `"${mod.subtitle}" cannot render in the fixed ${subtitleField.width}mm subtitle tile at 1 line — the renderer would refuse to distort it. Shorten the module subtitle.`
+133|          )
+134|        );
+135|      }
+136|    }
+137|  }
+138|
+139|  return issues;
+140|};
+141|

@@ -1,0 +1,12 @@
+"use strict";
+const fs = require("fs");
+const o = [];
+const P1 = "src/lib/renderer/moduleFit.ts";
+const s1 = fs.readFileSync(P1, "utf8");
+o.push("imp-in-s1=" + (s1.indexOf("CertificateModuleInput") >= 0 ? 1 : 0));
+o.push("up-in-s1=" + (s1.indexOf("|| field.uppercase ?") >= 0 ? 1 : 0));
+const P2 = "src/app/admin/certificates/new/page.tsx";
+const s2 = fs.readFileSync(P2, "utf8");
+o.push("tpl-call-in-s2=" + (s2.indexOf("certificateTemplateVersion,\n      );") >= 0 ? 1 : 0));
+fs.writeFileSync("scripts/_fixScan2.txt", o.join("\n"), "utf8");
+console.log("scan2");

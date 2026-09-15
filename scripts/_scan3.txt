@@ -1,0 +1,57 @@
+==mFit 1-4
+1|import type { TemplateConfig, TemplateField, CertificateModule } from "@/lib/types";
+2|import { fitTextToField } from "./textFitting";
+3|
+4|export interface ModuleFitIssue {
+==mFit 74-81
+74| */
+75|export const collectModuleFitIssues = (
+76|  template: TemplateConfig,
+77|  modules: CertificateModule[]
+78|): ModuleFitIssue[] => {
+79|  const issues: ModuleFitIssue[] = [];
+80|
+81|  for (const mod of modules) {
+==mFit 44-55
+44|  };
+45|  return F[fontName] ?? 0.55;
+46|};
+47|
+48|const transformUppercase = (text: string, field: TemplateField): string =>
+49|  field.transformUppercase ? text.toUpperCase() : text;
+50|
+51|const describe = (
+52|  order: number,
+53|  field: string,
+54|  tileLabel: string,
+55|  text: string,
+==page 264-292
+264|    });
+265|  };
+266|
+267|  const generatePreview = async () => {
+268|    setPreviewLoading(true);
+269|    setPreviewErrors([]);
+270|    setFormErrors([]);
+271|    try {
+272|      const resolvedTpl = getTemplateById(
+273|        formData.certificateTemplateId ?? formData.certificateTemplateVersion ?? "",
+274|        formData.certificateTemplateVersion
+275|      );
+276|      const fitIssues = collectModuleFitIssues(resolvedTpl, formData.modules);
+277|      if (fitIssues.length > 0) {
+278|        setModuleFitIssues(fitIssues);
+279|        setPreviewErrors(fitIssues.map((fi) => fi.reason));
+280|        setPreviewLoading(false);
+281|        return;
+282|      }
+283|      setModuleFitIssues([]);
+284|      const result = await apiClient.generatePreview(formData);
+285|      if (result.success && result.preview) {
+286|        // The API returns a base64 data URI. For anything but tiny PDFs this
+287|        // can exceed Chrome's ~2,097,152-character URL length limit when used
+288|        // directly as an <iframe src>, causing it to silently fail to render
+289|        // (no console error, just a blank frame). Converting to a Blob URL
+290|        // avoids that limit entirely.
+291|        const blobUrl = base64DataUriToBlobUrl(result.preview);
+292|        setPreviewPdf((prev) => {

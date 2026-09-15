@@ -1,0 +1,34 @@
+==mFit import
+1|import type { TemplateConfig, TemplateField, CertificateModuleInput } from "@/lib/types";
+2|import { fitTextToField } from "./textFitting";
+3|
+==mFit transform
+48|const transformUppercase = (text: string, field: TemplateField): string =>
+49|  field.transformUppercase || field.uppercase ? text.toUpperCase() : text;
+50|
+==tpl idx 1-6
+MISSING
+==tpl idx 40-55
+MISSING
+==page state 40-60
+40|}
+41|
+42|export default function CreateCertificatePage() {
+43|  const [stage, setStage] = useState<CreateStage>("form");
+44|  const [loadingCourses, setLoadingCourses] = useState(true);
+45|  const [coursesError, setCoursesError] = useState<string | null>(null);
+46|  const [loadingSignatories, setLoadingSignatories] = useState(true);
+47|  const [courses, setCourses] = useState<(CourseRecord & { modules: CourseModuleRecord[] })[]>([]);
+48|  const [signatories, setSignatories] = useState<SignatoryRecord[]>([]);
+49|  const [previewPdf, setPreviewPdf] = useState<string | null>(null);
+50|  const [previewLoading, setPreviewLoading] = useState(false);
+51|  const [previewErrors, setPreviewErrors] = useState<string[]>([]);
+52|const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
+53|  const [issueLoading, setIssueLoading] = useState(false);
+54|  const [formErrors, setFormErrors] = useState<string[]>([]);
+55|  const [issuedCert, setIssuedCert] = useState<CertificateRecord | null>(null);
+56|  const [draftId, setDraftId] = useState<string | null>(null);
+57|  const [user, setUser] = useState<AdminUser | null>(null);
+58|  const [selectedCourseId, setSelectedCourseId] = useState<string>("");
+59|
+60|  const [formData, setFormData] = useState<CertificateCreateInput & {

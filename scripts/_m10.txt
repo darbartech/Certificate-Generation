@@ -1,0 +1,77 @@
+==imp
+1|import type { TemplateConfig, TemplateField, CertificateModuleInput } from "@/lib/types";
+2|import { fitTextToField } from "./textFitting";
+3|
+==types 40-85
+40|  distinction?: string;
+41|};
+42|
+43|export type CertificateData = {
+44|  recipient: Recipient;
+45|  program: Program;
+46|  modules: CertificateModule[];
+47|  grade?: string;
+48|  completionDate?: string;
+49|  issueDate: string;
+50|  signatory: Signatory;
+51|  secondarySignatory?: Signatory;
+52|};
+53|
+54|export type CertificateRecord = {
+55|  id: string;
+56|  certificate_number: string;
+57|  verification_token: string;
+58|  template_id: string;
+59|  template_version: string;
+60|  renderer_version: string;
+61|
+62|  recipient_name: string;
+63|  student_id?: string | null;
+64|
+65|  program_id?: string | null;
+66|  program_title: string;
+67|  duration: string;
+68|
+69|  completion_date?: string | null;
+70|  issue_date: string;
+71|
+72|  grade?: string | null;
+73|
+74|  status: CertificateStatus;
+75|
+76|  signatory_id?: string | null;
+77|  signatory_name_snapshot: string;
+78|  signatory_position_snapshot: string;
+79|
+80|  public_visibility: Record<string, boolean>;
+81|
+82|  pdf_storage_key?: string | null;
+83|  preview_storage_key?: string | null;
+84|
+85|  issued_at?: string | null;
+==tplidx
+MISSING
+==page imp
+1|"use client";
+2|
+3|import { useState, useEffect, FormEvent, useRef, useCallback } from "react";
+4|import Link from "next/link";
+5|import apiClient from "@/lib/api/client";
+6|import { getCurrentDateStr } from "@/lib/renderer/dateFormatter";
+7|import { collectModuleFitIssues, type ModuleFitIssue } from "@/lib/renderer/moduleFit";
+8|import { getTemplateById } from "@/lib/templates/darbartech-certificate-v2";
+9|import type {
+10|  CertificateCreateInput,
+11|  CertificateModule,
+12|  AdminUser,
+13|  SignatoryRecord,
+==page modules state
+56|  const [draftId, setDraftId] = useState<string | null>(null);
+57|  const [user, setUser] = useState<AdminUser | null>(null);
+58|  const [selectedCourseId, setSelectedCourseId] = useState<string>("");
+59|
+60|  const [formData, setFormData] = useState<CertificateCreateInput & {
+61|    certificateTemplateId?: string;
+62|    certificateTemplateVersion?: string;
+63|    providerName?: string;
+64|    completionStatement?: string;

@@ -1,0 +1,93 @@
+=== imports (lines 1-70) ===
+1|"use client";
+2|
+3|import { useState, useEffect, FormEvent, useRef, useCallback } from "react";
+4|import Link from "next/link";
+5|import apiClient from "@/lib/api/client";
+6|import { getCurrentDateStr } from "@/lib/renderer/dateFormatter";
+7|import type {
+8|  CertificateCreateInput,
+9|  CertificateModule,
+10|  AdminUser,
+11|  SignatoryRecord,
+12|  CourseRecord,
+13|  CourseModuleRecord,
+14|  CertificateRecord,
+15|} from "@/lib/types";
+16|
+17|const EXACT_MODULE_COUNT = 4;
+18|
+19|type CreateStage = "form" | "preview" | "success";
+20|
+21|// Converts a "data:<mime>;base64,<data>" string into a Blob object URL.
+22|// Blob URLs don't have the ~2MB character limit that data URIs hit when
+23|// used as an <iframe src> in Chrome, which causes large PDFs to silently
+24|// fail to render.
+25|function base64DataUriToBlobUrl(dataUri: string): string {
+26|  const [header, base64] = dataUri.split(",");
+27|  const mimeMatch = header.match(/data:(.*);base64/);
+28|  const mimeType = mimeMatch?.[1] || "application/pdf";
+29|
+30|  const byteChars = atob(base64);
+31|  const byteNumbers = new Array(byteChars.length);
+32|  for (let i = 0; i < byteChars.length; i++) {
+33|    byteNumbers[i] = byteChars.charCodeAt(i);
+34|  }
+35|  const byteArray = new Uint8Array(byteNumbers);
+36|  const blob = new Blob([byteArray], { type: mimeType });
+37|  return URL.createObjectURL(blob);
+38|}
+39|
+40|export default function CreateCertificatePage() {
+41|  const [stage, setStage] = useState<CreateStage>("form");
+42|  const [loadingCourses, setLoadingCourses] = useState(true);
+43|  const [coursesError, setCoursesError] = useState<string | null>(null);
+44|  const [loadingSignatories, setLoadingSignatories] = useState(true);
+45|  const [courses, setCourses] = useState<(CourseRecord & { modules: CourseModuleRecord[] })[]>([]);
+46|  const [signatories, setSignatories] = useState<SignatoryRecord[]>([]);
+47|  const [previewPdf, setPreviewPdf] = useState<string | null>(null);
+48|  const [previewLoading, setPreviewLoading] = useState(false);
+49|  const [previewErrors, setPreviewErrors] = useState<string[]>([]);
+50|  const [issueLoading, setIssueLoading] = useState(false);
+51|  const [formErrors, setFormErrors] = useState<string[]>([]);
+52|  const [issuedCert, setIssuedCert] = useState<CertificateRecord | null>(null);
+53|  const [draftId, setDraftId] = useState<string | null>(null);
+54|  const [user, setUser] = useState<AdminUser | null>(null);
+55|  const [selectedCourseId, setSelectedCourseId] = useState<string>("");
+56|
+57|  const [formData, setFormData] = useState<CertificateCreateInput & {
+58|    certificateTemplateId?: string;
+59|    certificateTemplateVersion?: string;
+60|    providerName?: string;
+61|    completionStatement?: string;
+62|  }>({
+63|    recipient: { name: "" },
+64|    program: { title: "", duration: "", id: "", code: "" },
+65|    modules: [],
+66|    grade: "",
+67|    completionDate: "",
+68|    issueDate: getCurrentDateStr(),
+69|    signatory: { name: "", position: "", id: "" },
+70|    secondarySignatory: { name: "Nirmala Shrestha", position: "Managing Director", id: "" },
+=== refs to collectModuleFit|moduleFitWarnings|getModuleTileTemplate|getTemplateById|EXACT_MODULE ===
+17|const EXACT_MODULE_COUNT = 4;
+183|const isTemplateCompatible = formData.modules.length === EXACT_MODULE_COUNT;
+187|`Course &quot;${selectedCourse.code}&quot; defines ${formData.modules.length} active modules, but certificate template v2 requires exactly ${EXACT_MODULE_COUNT}.`
+192|`Certificate template v2 requires exactly ${EXACT_MODULE_COUNT} modules. Current count: ${formData.modules.length}.`
+297|if (formData.modules.length !== EXACT_MODULE_COUNT) {
+299|`Exactly ${EXACT_MODULE_COUNT} modules are required for the certificate template v2. Current count: ${formData.modules.length}.`
+554|`⚠ Module count must be exactly ${EXACT_MODULE_COUNT}`
+734|formData.modules.length === EXACT_MODULE_COUNT
+740|{formData.modules.length !== EXACT_MODULE_COUNT && (
+765|Course &quot;{selectedCourse.code}&quot; provides exactly {EXACT_MODULE_COUNT} active modules —
+777|The current certificate design (v2) supports exactly {EXACT_MODULE_COUNT} modules.
+780|{formData.modules.length < EXACT_MODULE_COUNT && (
+782|{EXACT_MODULE_COUNT - formData.modules.length} additional module
+783|{EXACT_MODULE_COUNT - formData.modules.length !== 1 ? "s are" : " is"}
+787|{formData.modules.length > EXACT_MODULE_COUNT && (
+789|{formData.modules.length - EXACT_MODULE_COUNT} extra module
+790|{formData.modules.length - EXACT_MODULE_COUNT !== 1 ? "s must" : " must"}
+878|Course Modules ({formData.modules.length}/{EXACT_MODULE_COUNT}) *
+888|disabled={!!selectedCourse || formData.modules.length >= EXACT_MODULE_COUNT}
+895|Exactly {EXACT_MODULE_COUNT} modules are required for the v2 4-column certificate template.
+=== total lines 1140

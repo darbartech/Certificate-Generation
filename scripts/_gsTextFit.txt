@@ -1,0 +1,19 @@
+exports: mmToPt, estimateCharWidth, estimateTextWidth, wrapTextToWidth, fitTextToField, getXOffsetForAlignment, validateModuleLayout
+
+--- fitTextToField sig ---
+fitTextToField = (
+  text: string,
+  field: TemplateField
+): {
+  fontSize: number;
+  lines: string[];
+  fits: boolean;
+  error?: string;
+} => {
+  const maxWidthPt = mmToPt(field.width);
+  const maxLines = field.maxLines;
+  const lineHeightRatio = field.lineHeight || 1.2;
+  const letterSpacing = field.letterSpacing || 0;
+  const fontName = field.font || "Helvetica";
+
+  let fontSize = field.fontSize

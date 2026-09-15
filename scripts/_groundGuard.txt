@@ -1,0 +1,70 @@
+=== page imports containing Fit/fit ===
+
+=== src/lib/renderer/moduleFit.ts exists=true ===
+import type { TemplateConfig, TemplateField, CertificateModuleInput } from "@/lib/types";
+import { fitTextToField } from "./textFitting";
+
+export interface ModuleFitIssue {
+  order: number;
+  field: string;
+  tileLabel: string;
+  textToRender: string;
+  originalText: string;
+  hard: boolean;
+  reason: string;
+}
+
+const MODULE_TILE_FIELDS = [
+  { order: 1, title: "module1Title", subtitle: "module1Su
+
+=== src/lib/renderer/moduleTileFit.ts exists=true ===
+import type { TemplateConfig, TemplateField, CertificateModuleInput } from "@/lib/types";
+import { fitTextToField } from "./textFitting";
+import { getModuleTileField, MODULE_TILE_ORDERS } from "@/lib/templates/darbartech-certificate-v2";
+import { transformUppercase } from "./render.helpers";
+
+/**
+ * Pre-flight module-tile fit guard for the fixed 4-column v2 certificate.
+ *
+ * The v2 module tiles a
+
+=== template: module4Title + module1Title + MIN_FONT constants ===
+letterSpacing: 3
+letterSpacing: 170
+letterSpacing: 25
+letterSpacing: 10
+letterSpacing: 18
+letterSpacing: 0
+letterSpacing: 180
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 10
+letterSpacing: 10
+letterSpacing: 10
+letterSpacing: 10
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 10
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 10
+letterSpacing: 0
+letterSpacing: 10
+letterSpacing: 0
+letterSpacing: 10
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 0
+letterSpacing: 0
+field count of module1Title block: 1

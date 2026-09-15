@@ -1,0 +1,18 @@
+150..165
+150|
+151|  // fonts/sizes summary
+152|  const fsMap = {};
+153|  for (const r of runs) {
+154|    const k = r.font + " " + r.size.toFixed(1) + "pt";
+155|    fsMap[k] = (fsMap[k] || 0) + 1;
+156|  }
+157|  out.push("  ---- fonts (name size = count) ----");
+158|  for (const [k, v] of Object.entries(fsMap)) out.push("    " + k + "  x" + vninja);
+159|  for (const k of Object.keys(fsMap)) out.push("    " + k + "  x" + fsMap[k]);
+160|
+161|
+162|  out.push("  ---- placed images (name mmW x mmH @ mmX,mmY | px x py bpc cs) ----");
+163|  for (const im of imgs) {
+164|    out.push("    " + im.name + "  " + im.mmW + " x " + im.mmH + " mm @ (" + im.mmX + ", " + im.mmY + ") | " + (im.px || "?") + " x " + (im.py || "?") + "px " + (im.bpc || "?") + "bpc " + (im.cs || "?"));
+165|  }
+166|

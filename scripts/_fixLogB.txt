@@ -1,0 +1,6 @@
+==e1 src/lib/renderer/moduleFit.ts ex=true
+  replaced=0  !!ANCHOR_MISSING
+==e2 src/lib/renderer/moduleFit.ts ex=true
+  replaced=1
+==e3 src/app/admin/certificates/new/page.tsx ex=true
+  replaced=0  !!ANCHOR_MISSING

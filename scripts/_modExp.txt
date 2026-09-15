@@ -1,0 +1,39 @@
+== moduleFit.ts export surface ==
+4|export interface ModuleFitIssue {
+5|  order: number;
+6|  field: string;
+7|  tileLabel: string;
+8|  textToRender: string;
+9|  originalText: string;
+10|  hard: boolean;
+11|  reason: string;
+14|const MODULE_TILE_FIELDS = [
+21|const getTileTemplate = (
+22|  template: TemplateConfig,
+23|  order: number
+25|  const def = MODULE_TILE_FIELDS.find((t) => t.order === order);
+27|  const f = template.fields || {};
+34|const getFontWidthFactor = (fontName: string): number => {
+48|const transformUppercase = (text: string, field: TemplateField): string =>
+51|const describe = (
+52|  order: number,
+53|  field: string,
+54|  tileLabel: string,
+55|  text: string,
+56|  originalText: string,
+57|  hard: boolean,
+58|  reason: string
+63|  textToRender: text,
+66|  reason: `${reason} (field geometry — see certificate v2 / 4-column tile layout; documented minimum font: 6.7pt title / 5.3pt subtitle).`,
+75|export const collectModuleFitIssues = (
+76|  template: TemplateConfig,
+77|  modules: CertificateModuleInput[]
+82|    const tiles = getTileTemplate(template, mod.order);
+98|    const titleField = tiles.title;
+99|    const subtitleField = tiles.subtitle;
+100|    const text = transformUppercase(mod.title || "", titleField || ({} as TemplateField));
+103|      const fit = fitTextToField(text, titleField);
+121|      const textSub = mod.subtitle;
+122|      const fitSub = fitTextToField(textSub, subtitleField);
+
+TOTAL_LINES=141

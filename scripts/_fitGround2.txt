@@ -1,0 +1,14 @@
+## src/lib/renderer/moduleTileFit.ts
+   import { fitTextToField } from "./textFitting";
+   * This guard intentionally uses the SAME `fitTextToField` + the SAME template
+   export interface ModuleTileFitIssue {
+   /** The exact template field key, e.g. "module4Title". */
+   { order: 1, title: "module1Title", subtitle: "module1Subtitle" },
+   { order: 4, title: "module4Title", subtitle: "module4Subtitle" },
+   ): ModuleTileFitIssue => ({
+   export const collectModuleTileIssues = (
+   ): ModuleTileFitIssue[] => {
+   const issues: ModuleTileFitIssue[] = [];
+   `Certificate template v2 defines module tiles 1-4 only ("module1Title".."module4Title"). ` +
+   const res = fitTextToField(
+   const res = fitTextToField(

@@ -1,0 +1,31 @@
+== src/lib/renderer/moduleTileFit.ts  exists=true ==
+  lines=123
+  line 78-92:
+    78|    }
+    79|
+    80|    const titleField = getModuleTileField(template, order, "title") as TemplateField | null;
+    81|    const subtitleField = getModuleTileField(template, order, "subtitle") as TemplateField | null.DataTransfer
+    82|
+    83|    const rawTitle = transformUppercase(mod.title || "", { transformUppercase: true });
+    84|    const rawSubtitle = transformUppercase(mod.subtitle || "", { transformUppercase: false });
+    85|
+    86|    if (titleField && rawTitle) {
+    87|      const fit = fitTextToField(rawTitle, titleField, titleField.font || "Montserrat-SemiBold", titleField.weight || "600", titleField.letterSpacing || 0, undefined);
+    88|      if (!fit.fit) {
+    89|        issues.push(
+    90|          describe(
+    91|            order,
+    92|            titleField.field,
+  export surface:
+    24|export interface ModuleTileFitIssue {
+    57|export const collectModuleTileFitIssues = (
+
+== src/lib/renderer/moduleFit.ts  exists=true ==
+  lines=141
+  export surface:
+    4|export interface ModuleFitIssue {
+    75|export const collectModuleFitIssues = (
+
+== src/app/admin/certificates/new/page.tsx renderer imports ==
+    6|import { getCurrentDateStr } from "@/lib/renderer/dateFormatter";
+    7|import { collectModuleFitIssues, type ModuleFitIssue } from "@/lib/renderer/moduleFit";

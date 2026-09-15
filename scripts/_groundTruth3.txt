@@ -1,0 +1,107 @@
+=== walk src/lib for moduleFit/files with ModuleFit ===
+src/lib/renderer/moduleTileFit.ts
+
+=== textFitting exports ===
+mmToPt
+estimateCharWidth
+estimateTextWidth
+wrapTextToWidth
+fitTextToField
+getXOffsetForAlignment
+validateModuleLayout
+
+=== fitTextToField head ===
+export const fitTextToField = (
+  text: string,
+  field: TemplateField
+): {
+  fontSize: number;
+  lines: string[];
+  fits: boolean;
+  error?: string;
+} => {
+  const maxWidthPt = mmToPt(field.width);
+  const maxLines = field.maxLines;
+  const lineHeightRatio = field.lineHeight || 1.2;
+  const letterSpacing = field.letterSpacing || 0;
+  const fontName = field.font || "Helvetica";
+
+  let fontSize = field.fontSize;
+  let lines: string[] = [];
+  let fits = false;
+
+  while (fontSize >= field.minFontSize) {
+    lines = wrapTextToWidth(text, maxWidthPt, fontSize, field.weight, letterSpacing, fontName);
+
+    // NOTE: field.height is the tight ink bounding box measured off the PSD
+    // sample text, 
+
+=== v2 module tile field geometry (module[1-4]Title/Subtitle) ===
+-- module1Title @line367 --
+-- module2Title @line386 --
+-- module3Title @line405 --
+-- module4Title @line424 --
+-- module1Subtitle @line443 --
+-- module2Subtitle @line461 --
+-- module3Subtitle @line479 --
+-- module4Subtitle @line497 --
+   width: 53.7,
+   font: "Montserrat-SemiBold",
+   fontSize: 10,
+   letterSpacing: 10,
+   maxLines: 1,
+   minFontSize: 6.7,
+   overflowPolicy: "shrink_then_reject" as const,
+   transformUppercase: true,
+   width: 42.2,
+   font: "Montserrat-SemiBold",
+   fontSize: 10,
+   letterSpacing: 10,
+   maxLines: 1,
+   minFontSize: 6.7,
+   overflowPolicy: "shrink_then_reject" as const,
+   transformUppercase: true,
+   width: 32.3,
+   font: "Montserrat-SemiBold",
+   fontSize: 10,
+   letterSpacing: 10,
+   maxLines: 1,
+   minFontSize: 6.7,
+   overflowPolicy: "shrink_then_reject" as const,
+   transformUppercase: true,
+   width: 28.1,
+   font: "Montserrat-SemiBold",
+   fontSize: 10,
+   letterSpacing: 10,
+   maxLines: 1,
+   minFontSize: 6.7,
+   overflowPolicy: "shrink_then_reject" as const,
+   transformUppercase: true,
+   width: 40.6,
+   font: "Montserrat-SemiBold",
+   fontSize: 8,
+   letterSpacing: 0,
+   maxLines: 1,
+   minFontSize: 5.3,
+   overflowPolicy: "shrink_then_reject" as const,
+   width: 52.6,
+   font: "Montserrat-SemiBold",
+   fontSize: 8,
+   letterSpacing: 0,
+   maxLines: 1,
+   minFontSize: 5.3,
+   overflowPolicy: "shrink_then_reject" as const,
+   width: 55.1,
+   font: "Montserrat-SemiBold",
+   fontSize: 8,
+   letterSpacing: 0,
+   maxLines: 1,
+   minFontSize: 5.3,
+   overflowPolicy: "shrink_then_reject" as const,
+   width: 51.5,
+   font: "Montserrat-SemiBold",
+   fontSize: 8,
+   letterSpacing: 0,
+   maxLines: 1,
+   minFontSize: 5.3,
+   overflowPolicy: "shrink_then_reject" as const,

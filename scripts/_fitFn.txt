@@ -1,0 +1,176 @@
+TOTAL=280
+106|  fontName?: string
+107|): string[] => {
+108|  if (!text) return [];
+109|
+110|  const words = text.split(/\s+/);
+111|  const lines: string[] = [];
+112|  let currentLine = "";
+113|
+114|  for (const word of words) {
+115|    const testLine = currentLine ? `${currentLine} ${word}` : word;
+116|    const lineWidth = estimateTextWidth(testLine, fontSize, weight, letterSpacing, fontName);
+117|    if (lineWidth <= maxWidthPt) {
+118|      currentLine = testLine;
+119|    } else {
+120|      if (currentLine) lines.push(currentLine);
+121|      const wordWidth = estimateTextWidth(word, fontSize, weight, letterSpacing, fontName);
+122|      if (wordWidth > maxWidthPt) {
+123|        let remaining = word;
+124|        while (remaining.length > 0) {
+125|          let chunkLength = 1;
+126|          while (
+127|            chunkLength < remaining.length &&
+128|            estimateTextWidth(remaining.slice(0, chunkLength + 1), fontSize, weight, letterSpacing, fontName) <= maxWidthPt
+129|          ) {
+130|            chunkLength++;
+131|          }
+132|          lines.push(remaining.slice(0, chunkLength));
+133|          remaining = remaining.slice(chunkLength);
+134|        }
+135|        currentLine = "";
+136|      } else {
+137|        currentLine = word;
+138|      }
+139|    }
+140|  }
+141|  if (currentLine) lines.push(currentLine);
+142|
+143|  return lines;
+144|};
+145|
+146|export const fitTextToField = (
+147|  text: string,
+148|  field: TemplateField
+149|): {
+150|  fontSize: number;
+151|  lines: string[];
+152|  fits: boolean;
+153|  error?: string;
+154|} => {
+155|  const maxWidthPt = mmToPt(field.width);
+156|  const maxLines = field.maxLines;
+157|  const lineHeightRatio = field.lineHeight || 1.2;
+158|  const letterSpacing = field.letterSpacing || 0;
+159|  const fontName = field.font || "Helvetica";
+160|
+161|  let fontSize = field.fontSize;
+162|  let lines: string[] = [];
+163|  let fits = false;
+164|
+165|  while (fontSize >= field.minFontSize) {
+166|    lines = wrapTextToWidth(text, maxWidthPt, fontSize, field.weight, letterSpacing, fontName);
+167|
+168|    // NOTE: field.height is the tight ink bounding box measured off the PSD
+169|    // sample text, not a line-box budget (it isn't used to position the
+170|    // drawn text either - see certificateRenderer.ts, which positions purely
+171|    // from field.y and fontSize). Comparing lines*fontSize*lineHeight against
+172|    // it produced false "overflow" rejections on every field. The only real
+173|    // constraint is that the wrapped text stays within maxLines.
+174|    if (lines.length <= maxLines) {
+175|      fits = true;
+176|      break;
+177|    }
+178|
+179|    fontSize -= 0.5;
+180|  }
+181|
+182|  if (!fits) {
+183|    if (field.overflowPolicy === "shrink_then_reject" || field.overflowPolicy === "reject") {
+184|      return {
+185|        fontSize: field.minFontSize,
+186|        lines,
+187|        fits: false,
+188|        error: `Text "${text.slice(0, 40)}${text.length > 40 ? "..." : ""}" does not fit in field "${field.field}". Maximum allowed: ${field.maxLines} lines at minimum ${field.minFontSize}pt.`,
+189|      };
+190|    }
+191|    if (field.overflowPolicy === "wrap_then_shrink") {
+192|      lines = lines.slice(0, maxLines);
+193|      if (lines.length > 0) {
+194|        const lastLine = lines[lines.length - 1];
+195|        const maxCharWidth = estimateCharWidth(field.minFontSize, field.weight, fontName);
+196|        const maxChars = Math.floor(maxWidthPt / maxCharWidth) - 1;
+197|        if (lastLine.length > maxChars && maxChars > 3) {
+198|          lines[lines.length - 1] = lastLine.slice(0, maxChars - 3) + "...";
+199|        }
+200|      }
+201|      return {
+202|        fontSize: field.minFontSize,
+203|        lines,
+204|        fits: false,
+205|        error: `Text "${text.slice(0, 40)}..." in field "${field.field}" was truncated.`,
+206|      };
+207|    }
+208|  }
+209|
+210|  return { fontSize, lines, fits: true };
+211|};
+212|
+213|export const getXOffsetForAlignment = (
+214|  textWidthPt: number,
+215|  fieldXmm: number,
+216|  fieldWidthMm: number,
+217|  alignment: "left" | "center" | "right"
+218|): number => {
+219|  const fieldXpt = mmToPt(fieldXmm);
+220|  const fieldWidthPt = mmToPt(fieldWidthMm);
+221|  switch (alignment) {
+222|    case "center":
+223|      return fieldXpt + (fieldWidthPt - textWidthPt) / 2;
+224|    case "right":
+225|      return fieldXpt + fieldWidthPt - textWidthPt;
+226|    case "left":
+227|    default:
+228|      return fieldXpt;
+229|  }
+230|};
+231|
+232|export const validateModuleLayout = (
+233|  modules: { title: string; subtitle?: string }[],
+234|  template: {
+235|    moduleConstraints: {
+236|      minCount: number;
+237|      maxCount: number;
+238|      maxTitleLength: number;
+239|      maxSubtitleLength: number;
+240|      area: { height: number; gap: number };
+241|      item: { titleSize: number; subtitleSize: number };
+242|    };
+243|  }
+244|): { valid: boolean; errors: string[] } => {
+245|  const errors: string[] = [];
+246|  const { minCount, maxCount, maxTitleLength, maxSubtitleLength, area, item } = template.moduleConstraints;
+247|
+248|  if (modules.length < minCount) {
+249|    errors.push(`At least ${minCount} modules are required.`);
+250|  }
+251|  if (modules.length > maxCount) {
+252|    errors.push(`At most ${maxCount} modules are allowed.`);
+253|  }
+254|
+255|  modules.forEach((mod, idx) => {
+256|    if (!mod.title || mod.title.trim().length === 0) {
+257|      errors.push(`Module ${idx + 1}: title is required.`);
+258|    } else if (mod.title.length > maxTitleLength) {
+259|      errors.push(`Module ${idx + 1}: title exceeds ${maxTitleLength} characters.`);
+260|    }
+261|    if (mod.subtitle && mod.subtitle.length > maxSubtitleLength) {
+262|      errors.push(`Module ${idx + 1}: subtitle exceeds ${maxSubtitleLength} characters.`);
+263|    }
+264|  });
+265|
+266|  const moduleCount = modules.length;
+267|  const gapMm = area.gap;
+268|  const titleHeightPt = item.titleSize * 1.2;
+269|  const subtitleHeightPt = item.subtitleSize * 1.2;
+270|  const perModuleHeightPt = titleHeightPt + subtitleHeightPt + mmToPt(gapMm);
+271|  const totalRequiredPt = perModuleHeightPt * moduleCount;
+272|  const availablePt = mmToPt(area.height);
+273|
+274|  if (totalRequiredPt > availablePt) {
+275|    errors.push(`Module layout exceeds available vertical space. Reduce module count or shorten content.`);
+276|  }
+277|
+278|  return { valid: errors.length === 0, errors };
+279|};
+280|

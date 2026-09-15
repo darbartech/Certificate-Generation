@@ -1,0 +1,78 @@
+== PAGE: lines 1-20 (imports) ==
+1|"use client";
+2|
+3|import { useState, useEffect, FormEvent, useRef, useCallback } from "react";
+4|import Link from "next/link";
+5|import apiClient from "@/lib/api/client";
+6|import { getCurrentDateStr } from "@/lib/renderer/dateFormatter";
+7|import type {
+8|  CertificateCreateInput,
+9|  CertificateModule,
+10|  AdminUser,
+11|  SignatoryRecord,
+12|  CourseRecord,
+13|  CourseModuleRecord,
+14|  CertificateRecord,
+15|} from "@/lib/types";
+16|
+17|const EXACT_MODULE_COUNT = 4;
+18|
+19|type CreateStage = "form" | "preview" | "success";
+20|
+
+== PAGE: previewErrors state + generatePreview region ==
+17|const EXACT_MODULE_COUNT = 4;
+47|  const [previewPdf, setPreviewPdf] = useState<string | null>(null);
+48|  const [previewLoading, setPreviewLoading] = useState(false);
+49|  const [previewErrors, setPreviewErrors] = useState<string[]>([]);
+184|  const templateIssues: string[] = [];
+186|    templateIssues.push(
+191|    templateIssues.push(
+264|  const generatePreview = async () => {
+266|    setPreviewErrors([]);
+269|      const result = await apiClient.generatePreview(formData);
+281|        setPreviewErrors(result.warnings || []);
+283|        setPreviewErrors(result.errors || ["Preview generation failed"]);
+286|      setPreviewErrors([err instanceof Error ? err.message : "Preview error"]);
+333|        setPreviewErrors(draftResult.errors || ["Could not create draft"]);
+340|    setPreviewErrors([]);
+347|        setPreviewErrors(result.errors || ["Issuance failed"]);
+350|      setPreviewErrors([err instanceof Error ? err.message : "Issuance error"]);
+436|        {previewErrors.length > 0 && (
+440|              {previewErrors.map((e, i) => (
+529|              {templateIssues.length > 0 && (
+539|                    {templateIssues.map((ti, i) => (
+
+== REGISTRY: templates dir exports (getter signatures) ==
+## src/lib/templates/darbartech-certificate-v1.ts
+   getTemplateById : = (id: string, version?: string): TemplateConfig => {   if (id === "darbartech-certificate" && (!version || version === "1.0.0")) {     return DARBARTECH_CERTIFICATE_TEMPLATE;  
+   [surface] export const getTemplateById =
+   [surface] export const DEFAULT_PUBLIC_FIELDS =
+
+## src/lib/templates/darbartech-certificate-v2.ts
+   getTemplateById : = (id: string, version?: string): TemplateConfig => {   if (id === "darbartech-certificate") {     if (version === "1.0.0") {       return DARBARTECH_CERTIFICATE_TEMPLATE;     }   
+   [surface] export const DEFAULT_PUBLIC_FIELDS_V2 =
+   [surface] export { DARBARTECH_CERTIFICATE_TEMPLATE, DEFAULT_PUBLIC_FIELDS }
+   [surface] export const getTemplateById =
+
+## src/lib/services/certificateService.ts
+   [surface] export const createDraftCertificate =
+   [surface] export const generateCertificatePreview =
+   [surface] export const issueCertificate =
+   [surface] export const revokeCertificate =
+   [surface] export const reissueCertificate =
+   [surface] export const getCertificateWithModules =
+   [surface] export const downloadCertificatePdf =
+   [surface] export { ISSUER_NAME, TEMPLATE_ID, TEMPLATE_VERSION }
+
+## src/lib/templates/darbartech-certificate-v1.ts
+   getTemplateById : = (id: string, version?: string): TemplateConfig => {   if (id === "darbartech-certificate" && (!version || version === "1.0.0")) {     return DARBARTECH_CERTIFICATE_TEMPLATE;  
+   [surface] export const getTemplateById =
+   [surface] export const DEFAULT_PUBLIC_FIELDS =
+
+## src/lib/templates/darbartech-certificate-v2.ts
+   getTemplateById : = (id: string, version?: string): TemplateConfig => {   if (id === "darbartech-certificate") {     if (version === "1.0.0") {       return DARBARTECH_CERTIFICATE_TEMPLATE;     }   
+   [surface] export const DEFAULT_PUBLIC_FIELDS_V2 =
+   [surface] export { DARBARTECH_CERTIFICATE_TEMPLATE, DEFAULT_PUBLIC_FIELDS }
+   [surface] export const getTemplateById =
+

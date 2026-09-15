@@ -1,0 +1,73 @@
+== imports (lines 1-20) ==
+1|"use client";
+2|
+3|import { useState, useEffect, FormEvent, useRef, useCallback } from "react";
+4|import Link from "next/link";
+5|import apiClient from "@/lib/api/client";
+6|import { getCurrentDateStr } from "@/lib/renderer/dateFormatter";
+7|import type {
+8|  CertificateCreateInput,
+9|  CertificateModule,
+10|  AdminUser,
+11|  SignatoryRecord,
+12|  CourseRecord,
+13|  CourseModuleRecord,
+14|  CertificateRecord,
+15|} from "@/lib/types";
+16|
+17|const EXACT_MODULE_COUNT = 4;
+18|
+19|type CreateStage = "form" | "preview" | "success";
+20|
+
+== generatePreview region (find first, then +8 lines) ==
+264|  const generatePreview = async () => {
+265|    setPreviewLoading(true);
+266|    setPreviewErrors([]);
+267|    setFormErrors([]);
+268|    try {
+269|      const result = await apiClient.generatePreview(formData);
+270|      if (result.success && result.preview) {
+271|        // The API returns a base64 data URI. For anything but tiny PDFs this
+272|        // can exceed Chrome's ~2,097,152-character URL length limit when used
+
+== template/config access in page ==
+17|const EXACT_MODULE_COUNT = 4;
+183|  const isTemplateCompatible = formData.modules.length === EXACT_MODULE_COUNT;
+185|  if (selectedCourse && !isTemplateCompatible) {
+187|      `Course &quot;${selectedCourse.code}&quot; defines ${formData.modules.length} active modules, but certificate template v2 requires exactly ${EXACT_MODULE_COUNT}.`
+190|  if (!selectedCourse && !isTemplateCompatible) {
+192|      `Certificate template v2 requires exactly ${EXACT_MODULE_COUNT} modules. Current count: ${formData.modules.length}.`
+297|    if (formData.modules.length !== EXACT_MODULE_COUNT) {
+299|        `Exactly ${EXACT_MODULE_COUNT} modules are required for the certificate template v2. Current count: ${formData.modules.length}.`
+548|                  disabled={!canIssue || issueLoading || previewLoading || !isTemplateCompatible}
+553|                  ) : !isTemplateCompatible ? (
+554|                    `⚠ Module count must be exactly ${EXACT_MODULE_COUNT}`
+719|                      {selectedCourse.certificateTemplateId && (
+723|                            {selectedCourse.certificateTemplateId}
+724|                            {selectedCourse.certificateTemplateVersion
+725|                              ? ` v${selectedCourse.certificateTemplateVersion}`
+734|                            formData.modules.length === EXACT_MODULE_COUNT
+740|                          {formData.modules.length !== EXACT_MODULE_COUNT && (
+758|                  isTemplateCompatible ? (
+765|                        Course &quot;{selectedCourse.code}&quot; provides exactly {EXACT_MODULE_COUNT} active modules —
+777|                        The current certificate design (v2) supports exactly {EXACT_MODULE_COUNT} modules.
+780|                        {formData.modules.length < EXACT_MODULE_COUNT && (
+782|                            {EXACT_MODULE_COUNT - formData.modules.length} additional module
+783|                            {EXACT_MODULE_COUNT - formData.modules.length !== 1 ? "s are" : " is"}
+787|                        {formData.modules.length > EXACT_MODULE_COUNT && (
+789|                            {formData.modules.length - EXACT_MODULE_COUNT} extra module
+790|                            {formData.modules.length - EXACT_MODULE_COUNT !== 1 ? "s must" : " must"}
+878|                  Course Modules ({formData.modules.length}/{EXACT_MODULE_COUNT}) *
+888|                  disabled={!!selectedCourse || formData.modules.length >= EXACT_MODULE_COUNT}
+895|                Exactly {EXACT_MODULE_COUNT} modules are required for the v2 4-column certificate template.
+
+== src/lib/templates/* ==
+  file darbartech-certificate-v1.ts  10513B
+  file darbartech-certificate-v2.ts  29779B
+
+== exports mentioning getTemplate / templateV2 in templates dir ==
+  ## src/lib/templates/darbartech-certificate-v1.ts
+    export getTemplateById
+  ## src/lib/templates/darbartech-certificate-v2.ts
+    export getTemplateById

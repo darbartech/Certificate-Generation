@@ -1,0 +1,20 @@
+CertificateModuleInput occurrences:
+CertificateModule type lines:
+  11|export type CertificateModule = {
+  95|export type CertificateModuleRecord = {
+TemplateField interface/fields (v2 imports):
+  1|import type { TemplateConfig, ShapeConfig } from "@/lib/types";
+  2|import { DARBARTECH_CERTIFICATE_TEMPLATE } from "./darbartech-certificate-v1";
+  3|
+  4|const page = {
+  5|  width: 297,
+  6|  height: 210,
+  7|  unit: "mm" as const,
+  8|  dpi: 300,
+  9|  orientation: "landscape" as const,
+  10|  colorMode: "CMYK" as const,
+  11|};
+  12|
+getTemplateById export:
+  989|export const getTemplateById = (id: string, version?: string): TemplateConfig => {
+templates/index.ts exists=false

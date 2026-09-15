@@ -1,0 +1,108 @@
+== imports src/lib/renderer/moduleFit.ts ex=true ==
+1|import type { TemplateConfig, TemplateField, CertificateModuleInput } from "@/lib/types";
+2|import { fitTextToField } from "./textFitting";
+3|
+== moduleFit-mid src/lib/renderer/moduleFit.ts ex=true ==
+44|  };
+45|  return F[fontName] ?? 0.55;
+46|};
+47|
+48|const transformUppercase = (text: string, field: TemplateField): string =>
+49|  field.transformUppercase || field.uppercase ? text.toUpperCase() : text;
+50|
+51|const describe = (
+52|  order: number,
+53|  field: string,
+54|  tileLabel: string,
+55|  text: string,
+56|  originalText: string,
+57|  hard: boolean,
+58|  reason: string
+59|): ModuleFitIssue => ({
+60|  order,
+61|  field,
+62|  tileLabel,
+== types-index src/lib/types.ts ex=true ==
+0|undefined
+== moduleFit-tail src/lib/renderer/moduleFit.ts ex=true ==
+105|        issues.push(
+106|          describe(
+107|            mod.order,
+108|            titleField.field || `module${mod.order}Title`,
+109|            `Module ${mod.order} — Title`,
+110|            text,
+111|            mod.title || "",
+112|            fit.fontSize <= (titleField.minFontSize || 0) + 0.001,
+113|            `"${mod.title}" cannot render in the fixed ${titleField.width}mm tile at
+114|1 line with letterSpacing — the renderer would refuse to distort it. Shorten the module title to fit the 4-column v2 geometry.`
+115|          )
+116|        );
+117|      }
+118|    }
+119|
+120|    if (subtitleField && mod.subtitle) {
+121|      const textSub = mod.subtitle;
+122|      const fitSub = fitTextToField(textSub, subtitleField);
+123|      if (!fitSub.fits) {
+124|        issues.push(
+125|          describe(
+126|            mod.order,
+127|            subtitleField.field || `module${mod.order}Subtitle`,
+128|            `Module ${mod.order} — Subtitle`,
+129|            textSub,
+130|            mod.subtitle,
+131|            fitSub.fontSize <= (subtitleField.minFontSize || 0) + 0.001,
+132|            `"${mod.subtitle}" cannot render in the fixed ${subtitleField.width}mm subtitle tile at 1 line — the renderer would refuse to distort it. Shorten the module subtitle.`
+133|          )
+134|        );
+135|      }
+136|    }
+137|  }
+138|
+139|  return issues;
+140|};
+141|
+== page-gen src/app/admin/certificates/new/page.tsx ex=true ==
+258|      if (target < 0 || target >= modules.length) return prev;
+259|      [modules[idx], modules[target]] = [modules[target], modules[idx]];
+260|      return {
+261|        ...prev,
+262|        modules: modules.map((m: CertificateModule, i: number) => ({ ...m, order: i + 1 })),
+263|      };
+264|    });
+265|  };
+266|
+267|  const generatePreview = async () => {
+268|    setPreviewLoading(true);
+269|    setPreviewErrors([]);
+270|    setFormErrors([]);
+271|    try {
+272|      const resolvedTpl = getTemplateById(
+273|        formData.certificateTemplateId ?? formData.certificateTemplateVersion,
+274|        formData.certificateTemplateVersion
+275|      );
+276|      const fitIssues = collectModuleFitIssues(resolvedTpl, formData.modules);
+277|      if (fitIssues.length > 0) {
+278|        setModuleFitIssues(fitIssues);
+279|        setPreviewErrors(fitIssues.map((fi) => fi.reason));
+280|        setPreviewLoading(false);
+281|        return;
+282|      }
+283|      setModuleFitIssues([]);
+284|      const result = await apiClient.generatePreview(formData);
+285|      if (result.success && result.preview) {
+286|        // The API returns a base64 data URI. For anything but tiny PDFs this
+287|        // can exceed Chrome's ~2,097,152-character URL length limit when used
+288|        // directly as an <iframe src>, causing it to silently fail to render
+289|        // (no console error, just a blank frame). Converting to a Blob URL
+290|        // avoids that limit entirely.
+291|        const blobUrl = base64DataUriToBlobUrl(result.preview);
+292|        setPreviewPdf((prev) => {
+293|          if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+294|          return blobUrl;
+295|        });
+296|        setPreviewErrors(result.warnings || []);
+297|      } else {
+298|        setPreviewErrors(result.errors || ["Preview generation failed"]);
+299|      }
+300|    } catch (err) {

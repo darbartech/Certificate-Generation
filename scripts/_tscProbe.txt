@@ -1,0 +1,4 @@
+TSC_FAIL code=2
+src/lib/renderer/moduleTileFit.ts(81,98): error TS1005: ',' expected.
+
+---stderr---

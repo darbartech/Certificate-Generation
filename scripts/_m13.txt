@@ -1,0 +1,131 @@
+==v2 head
+1|import type { TemplateConfig, ShapeConfig } from "@/lib/types";
+2|import { DARBARTECH_CERTIFICATE_TEMPLATE } from "./darbartech-certificate-v1";
+3|
+4|const page = {
+5|  width: 297,
+6|  height: 210,
+7|  unit: "mm" as const,
+8|  dpi: 300,
+9|  orientation: "landscape" as const,
+10|  colorMode: "CMYK" as const,
+11|};
+12|
+13|const safeArea = {
+14|  topMm: 8,
+15|  rightMm: 8,
+16|  bottomMm: 8,
+17|  leftMm: 8,
+18|};
+19|
+20|const moduleConstraints = {
+==index head
+MISSING
+==types 90-135
+90|
+91|  reissued_from_id?: string | null;
+92|  data_snapshot?: Record<string, unknown>;
+93|};
+94|
+95|export type CertificateModuleRecord = {
+96|  id: string;
+97|  certificate_id: string;
+98|  sort_order: number;
+99|  title: string;
+100|  subtitle?: string | null;
+101|};
+102|
+103|export type CertificateEvent = {
+104|  id: string;
+105|  certificate_id: string;
+106|  event_type:
+107|    | "CREATED"
+108|    | "PREVIEW_GENERATED"
+109|    | "ISSUED"
+110|    | "DOWNLOADED"
+111|    | "VERIFIED"
+112|    | "REVOKED"
+113|    | "REISSUED";
+114|  actor_id?: string | null;
+115|  metadata?: Record<string, unknown>;
+116|  created_at: string;
+117|};
+118|
+119|export type CourseRecord = {
+120|  id: string;
+121|  code: string;
+122|  title: string;
+123|  duration: string;
+124|  active: boolean;
+125|  certificateTitle?: string;
+126|  certificateTemplateId?: string;
+127|  certificateTemplateVersion?: string;
+128|  providerName?: string;
+129|  completionStatement?: string;
+130|};
+131|
+132|export type CourseModuleRecord = {
+133|  id: string;
+134|  course_id: string;
+135|  sort_order: number;
+==types 1-60
+1|export type CertificateStatus =
+2|  | "DRAFT"
+3|  | "PREVIEW"
+4|  | "ISSUED"
+5|  | "REVOKED"
+6|  | "REISSUED"
+7|  | "CANCELLED";
+8|
+9|export type VerificationStatus = "VALID" | "REVOKED" | "NOT_FOUND";
+10|
+11|export type CertificateModule = {
+12|  order: number;
+13|  title: string;
+14|  subtitle?: string;
+15|};
+16|
+17|export type Recipient = {
+18|  name: string;
+19|  studentId?: string;
+20|};
+21|
+22|export type Program = {
+23|  id?: string;
+24|  title: string;
+25|  duration: string;
+26|  code?: string;
+27|};
+28|
+29|export type Signatory = {
+30|  id?: string;
+31|  name: string;
+32|  position: string;
+33|  signatureImage?: string;
+34|  active?: boolean;
+35|};
+36|
+37|export type Grade = {
+38|  value: string;
+39|  score?: number;
+40|  distinction?: string;
+41|};
+42|
+43|export type CertificateData = {
+44|  recipient: Recipient;
+45|  program: Program;
+46|  modules: CertificateModule[];
+47|  grade?: string;
+48|  completionDate?: string;
+49|  issueDate: string;
+50|  signatory: Signatory;
+51|  secondarySignatory?: Signatory;
+52|};
+53|
+54|export type CertificateRecord = {
+55|  id: string;
+56|  certificate_number: string;
+57|  verification_token: string;
+58|  template_id: string;
+59|  template_version: string;
+60|  renderer_version: string;

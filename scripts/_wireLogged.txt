@@ -1,0 +1,4 @@
+OK anchor1 import inserted after line 6
+OK anchor2 state inserted after line 51
+OK anchor3 guard inserted before line 272
+OK anchor4 strip line inserted

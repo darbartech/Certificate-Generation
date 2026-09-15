@@ -1,0 +1,5 @@
+156]  }
+157]  out.push("  ---- fonts (name size = count) ----");
+158]  for (const [k, v] of Object.entries(fsMap)) out.push("    " + k + "  x" + v);
+159]  for (const k of Object.keys(fsMap)) out.push("    " + k + "  x" + fsMap[k]);
+160]

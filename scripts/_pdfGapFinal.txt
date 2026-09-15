@@ -1,0 +1,138 @@
+############################################################
+## REFERENCE  Certificate of Aayara final.pdf
+## C:/Users/Nepal/Desktop/DarbarTech/Student/Certificate of Aayara final.pdf  exists=true
+############################################################
+  MediaBox 0.0 0.0 841.92 595.2  => 297.01 x 209.97mm
+  fonts=6  {"F1":"8","F2":"9","F3":"10","F4":"13","F5":"14","F6":"15"}
+  images=61
+    /Im0  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im1  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im10  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im11  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im12  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im13  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im14  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im15  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im16  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im17  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im18  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im19  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im2  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im20  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im21  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im22  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im23  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im24  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im25  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im26  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im27  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im28  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im29  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im3  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im30  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im31  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im32  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im33  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im34  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im35  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im36  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im37  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im38  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im39  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im4  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im40  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im41  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im42  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im43  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im44  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im45  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im46  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im47  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im48  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im49  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im5  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im50  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im51  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im52  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im53  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im54  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im55  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im56  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im57  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im58  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im59  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im6  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im60  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im7  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im8  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+    /Im9  3508x2480px  8bpc  DeviceCMYK  flt=DCTDecode
+  textRuns(pt-space x,y | font size | text) — first 44 —
+    x=189.4 y=0.8 | F4 1pt | \000\041
+    x=189.4 y=0.8 | F4 1pt | \000\060
+    x=189.4 y=0.8 | F4 1pt | \000\253
+    x=189.4 y=0.8 | F4 1pt | \000\301
+    x=189.4 y=0.8 | F4 1pt | \000\130
+    x=189.4 y=0.8 | F4 1pt | \000\111
+    x=189.4 y=0.8 | F4 1pt | \000\130
+    x=189.4 y=0.8 | F4 1pt | \000\041
+    x=189.4 y=0.8 | F4 1pt | \000\004
+    x=189.4 y=0.8 | F4 1pt | \000\301
+    x=189.4 y=0.8 | F4 1pt | \000\060
+    x=189.4 y=0.8 | F4 1pt | \000\003
+    x=189.4 y=0.8 | F4 1pt | \000\205
+    x=189.4 y=0.8 | F4 1pt | \000\111
+    x=189.4 y=0.8 | F4 1pt | \000\003
+    x=189.4 y=0.8 | F4 1pt | \000\041
+    x=189.4 y=0.8 | F4 1pt | \000\205
+    x=189.4 y=0.8 | F4 1pt | \000\170
+    x=189.4 y=0.8 | F4 1pt | \000\250
+    x=189.4 y=0.8 | F4 1pt | \000\156
+    x=189.4 y=0.8 | F4 1pt | \000\060
+    x=189.4 y=0.8 | F4 1pt | \000\301
+    x=189.4 y=0.8 | F4 1pt | \000\130
+    x=189.4 y=0.8 | F4 1pt | \000\205
+    x=189.4 y=0.8 | F4 1pt | \000\172
+    x=179.7 y=0.7 | F2 1pt | \000\301
+    x=179.7 y=0.7 | F2 1pt | \000\122
+    x=179.7 y=0.7 | F2 1pt | \000\130
+    x=179.7 y=0.7 | F2 1pt | \000\263
+    x=179.7 y=0.7 | F2 1pt | \000\003
+    x=179.7 y=0.7 | F2 1pt | \000\130
+    x=179.7 y=0.7 | F2 1pt | \000\263
+    x=179.7 y=0.7 | F2 1pt | \000\003
+    x=179.7 y=0.7 | F2 1pt | \000\301
+    x=179.7 y=0.7 | F2 1pt | \000\205
+    x=179.7 y=0.7 | F2 1pt | \000\003
+    x=179.7 y=0.7 | F2 1pt | \000\041
+    x=179.7 y=0.7 | F2 1pt | \000\060
+    x=179.7 y=0.7 | F2 1pt | \000\253
+    x=179.7 y=0.7 | F2 1pt | \000\301
+    x=179.7 y=0.7 | F2 1pt | \000\130
+    x=179.7 y=0.7 | F2 1pt | \000\111
+    x=179.7 y=0.7 | F2 1pt | \000\347
+    x=179.7 y=0.7 | F2 1pt | \000\003
+
+  font/size counts:
+    /F2 1pt x347
+    /F3 1pt x149
+    /F1 1pt x90
+    /F6 1pt x20
+    /F4 1pt x33
+
+############################################################
+## GEN  TESTING1.pdf
+## C:/Users/Nepal/Downloads/TESTING1.pdf  exists=true
+############################################################
+  images=0
+  textRuns(pt-space x,y | font size | text) — first 44 —
+
+  font/size counts:
+
+############################################################
+## GEN  testing2.pdf
+## C:/Users/Nepal/Downloads/testing2.pdf  exists=true
+############################################################
+  images=0
+  textRuns(pt-space x,y | font size | text) — first 44 —
+
+  font/size counts:

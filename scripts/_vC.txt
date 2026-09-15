@@ -1,0 +1,29 @@
+==mFit 47-50
+47|
+48|const transformUppercase = (text: string, field: TemplateField): string =>
+49|  field.transformUppercase ? text.toUpperCase() : text;
+50|
+==mFit 1-3
+1|import type { TemplateConfig, TemplateField, CertificateModule } from "@/lib/types";
+2|import { fitTextToField } from "./textFitting";
+3|
+==page 264-282
+264|    });
+265|  };
+266|
+267|  const generatePreview = async () => {
+268|    setPreviewLoading(true);
+269|    setPreviewErrors([]);
+270|    setFormErrors([]);
+271|    try {
+272|      const resolvedTpl = getTemplateById(
+273|        formData.certificateTemplateId ?? formData.certificateTemplateVersion ?? "",
+274|        formData.certificateTemplateVersion
+275|      );
+276|      const fitIssues = collectModuleFitIssues(resolvedTpl, formData.modules);
+277|      if (fitIssues.length > 0) {
+278|        setModuleFitIssues(fitIssues);
+279|        setPreviewErrors(fitIssues.map((fi) => fi.reason));
+280|        setPreviewLoading(false);
+281|        return;
+282|      }
