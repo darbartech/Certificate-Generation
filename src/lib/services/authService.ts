@@ -147,6 +147,19 @@ export const authenticateAdmin = async (
 ): Promise<AdminUser | null> => {
   await initPasswords();
 
+  // If the account is already locked out, return the same generic failure
+  // WITHOUT recording another failed attempt. Recording while locked out would
+  // recompute `lockedUntil = now + LOCKOUT_MS` on every further attempt,
+  // extending the window indefinitely for as long as anyone keeps hitting the
+  // endpoint — a self-inflicted DoS against a legitimate admin. The lockout
+  // must expire on its own fixed schedule.
+  if (isLockedOut(username)) {
+    // Keep a dummy bcrypt compare so the response time doesn't reveal the
+    // locked-out state vs. an unknown-username state.
+    await bcrypt.compare(password, DUMMY_HASH);
+    return null;
+  }
+
   const user = DEFAULT_USERS.find((u) => u.username === username);
 
   // Always compare against *some* bcrypt hash, even for unknown usernames or
@@ -155,7 +168,7 @@ export const authenticateAdmin = async (
   const hash = user ? PASSWORD_HASHES[user.username] : DUMMY_HASH;
   const valid = await bcrypt.compare(password, hash);
 
-  if (!user || !valid || isLockedOut(username)) {
+  if (!user || !valid) {
     recordFailedAttempt(username);
     return null;
   }
@@ -227,4 +240,11 @@ export const roleLabels: Record<AdminUser["role"], string> = {
   super_admin: "Super Admin",
   admin: "Admin",
   staff: "Staff",
+};
+
+// Maps a certificate_events.actor_id back to a displayable username. Used by
+// the dashboard activity feed and any audit-trail rendering.
+export const getUsernameById = (userId: string | null | undefined): string | null => {
+  if (!userId) return null;
+  return DEFAULT_USERS.find((u) => u.id === userId)?.username ?? null;
 };

@@ -46,8 +46,7 @@ body {
     @apply btn bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500;
   }
   .btn-gold {
-    @apply btn text-white hover:opacity-90 focus:ring-brand-gold;
-    background-color: #c9a227;
+    @apply btn bg-brand-gold text-white hover:opacity-90 focus:ring-brand-gold;
   }
   .input {
     @apply block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 text-sm border focus:border-brand-blue focus:ring focus:ring-brand-cyan focus:ring-opacity-20 disabled:bg-gray-50 disabled:text-gray-500;

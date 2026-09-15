@@ -9,7 +9,20 @@ import { z } from "zod";
 // section. Always validate against the template version that actually renders the PDF.
 import { DARBARTECH_CERTIFICATE_TEMPLATE_V2 } from "@/lib/templates/darbartech-certificate-v2";
 
-const moduleSchema = z.object({
+// Manual-verification certificate-number format. Derived from the same env
+// var the numbering service uses (CERTIFICATE_PREFIX, default "DT-CERT") so
+// this schema can never drift out of sync with the numbers the system actually
+// mints. Normalized to uppercase to match the manual-verify route, which
+// uppercases the input before the DB lookup.
+import { CERTIFICATE_PREFIX } from "@/lib/services/numberingService";
+
+const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const CERTIFICATE_NUMBER_PREFIX = CERTIFICATE_PREFIX.toUpperCase();
+const CERTIFICATE_NUMBER_RE = new RegExp(
+  `^${escapeRegExp(CERTIFICATE_NUMBER_PREFIX)}-\\d{4}-\\d{5}$`
+);
+
+export const moduleSchema = z.object({
   order: z.number().int().min(1),
   title: z
     .string()
@@ -113,7 +126,7 @@ export const certificateNumberManualSchema = z.object({
   certificateNumber: z
     .string()
     .trim()
-    .regex(/^DT-CERT-\d{4}-\d{5}$/, "Certificate number must match format: DT-CERT-YYYY-NNNNN"),
+    .regex(CERTIFICATE_NUMBER_RE, "Invalid certificate number format"),
 });
 
 export const publicVerificationSchema = z.object({
@@ -127,10 +140,6 @@ export const courseCreateSchema = z.object({
   title: z.string().trim().min(1, "Course title is required").max(200, "Title is too long"),
   duration: z.string().trim().min(1, "Duration is required").max(50, "Duration is too long"),
   modules: z.array(moduleSchema).optional(),
-});
-
-export const manualCertificateSearchSchema = z.object({
-  certificateNumber: z.string().trim().min(1, "Certificate number is required"),
 });
 
 export type CertificateCreateInput = z.infer<typeof certificateCreateSchema>;

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/database";
 import { logEvent } from "@/lib/services/auditService";
 import { formatCertificateDate } from "@/lib/renderer/dateFormatter";
-import { manualCertificateSearchSchema } from "@/lib/validation/schemas";
+import { certificateNumberManualSchema } from "@/lib/validation/schemas";
 import { validateRateLimit } from "@/lib/middleware/auth";
 import { ISSUER_NAME } from "@/lib/services/certificateService";
 import { DEFAULT_PUBLIC_FIELDS } from "@/lib/templates/darbartech-certificate-v1";
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const parsed = manualCertificateSearchSchema.safeParse(body);
+    const parsed = certificateNumberManualSchema.safeParse(body);
 
     if (!parsed.success) {
       const response: PublicVerificationResponse = {

@@ -448,7 +448,6 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
           </div>
         </div>
 
-        {moduleFitIssues.length > 0 && setModuleFitIssues(moduleFitIssues) !== undefined && null}
         {previewErrors.length > 0 && (
           <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-4">
             <p className="text-sm font-medium text-yellow-800 mb-2">Layout warnings:</p>

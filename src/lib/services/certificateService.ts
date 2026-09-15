@@ -287,77 +287,90 @@ export const issueCertificate = async (
     };
   }
 
-  let targetCert: CertificateRecord | null;
-  let modules: CertificateModuleRecord[] = [];
+  // -------------------------------------------------------------------------
+  // Commit window. By the time we reach here the PDF has ALREADY been rendered
+  // and saved to storage, and the certificate number has already been consumed
+  // from the sequence. Any DB failure in this block therefore leaves an
+  // orphaned PDF + consumed number with no committed certificate record, so it
+  // must be surfaced as a loud, distinct error — NOT as a generic failure the
+  // caller would retry with the same inputs (that would mint a second number
+  // and a second orphan under the same intent).
+  const commitFields = {
+    certificate_number: certificateNumber,
+    verification_token: verificationToken,
+    template_id: TEMPLATE_ID,
+    template_version: TEMPLATE_VERSION,
+    renderer_version: RENDERER_VERSION,
+    recipient_name: input.recipient.name,
+    student_id: input.recipient.studentId || null,
+    program_id: input.program.id || null,
+    program_title: input.program.title,
+    duration: input.program.duration,
+    completion_date: input.completionDate || null,
+    issue_date: input.issueDate,
+    grade: input.grade || null,
+    status: "ISSUED" as const,
+    signatory_id: input.signatory.id || null,
+    signatory_name_snapshot: input.signatory.name,
+    signatory_position_snapshot: input.signatory.position,
+    public_visibility: DEFAULT_PUBLIC_FIELDS_V2,
+    pdf_storage_key: pdfStorageKey,
+    issued_at: new Date().toISOString(),
+    data_snapshot: snapshotEnvelope as unknown as Record<string, unknown>,
+  };
+
+  let targetCert: CertificateRecord;
+  let modules: CertificateModuleRecord[];
 
   try {
-    targetCert = await db.certificates.findById(draftId);
-  } catch {
-    targetCert = null;
-  }
+    const existingDraft = await db.certificates.findById(draftId);
 
-  if (targetCert && targetCert.status === "DRAFT") {
-    targetCert = await db.certificates.update(draftId, {
-      certificate_number: certificateNumber,
-      verification_token: verificationToken,
-      template_id: TEMPLATE_ID,
-      template_version: TEMPLATE_VERSION,
-      renderer_version: RENDERER_VERSION,
-      recipient_name: input.recipient.name,
-      student_id: input.recipient.studentId || null,
-      program_id: input.program.id || null,
-      program_title: input.program.title,
-      duration: input.program.duration,
-      completion_date: input.completionDate || null,
-      issue_date: input.issueDate,
-      grade: input.grade || null,
-      status: "ISSUED",
-      signatory_id: input.signatory.id || null,
-      signatory_name_snapshot: input.signatory.name,
-      signatory_position_snapshot: input.signatory.position,
-      public_visibility: DEFAULT_PUBLIC_FIELDS_V2,
-      pdf_storage_key: pdfStorageKey,
-      issued_at: new Date().toISOString(),
-      data_snapshot: snapshotEnvelope as unknown as Record<string, unknown>,
-    });
-
-    modules = await db.certificateModules.findByCertificateId(draftId);
-  } else {
-    targetCert = await db.certificates.create({
-      certificate_number: certificateNumber,
-      verification_token: verificationToken,
-      template_id: TEMPLATE_ID,
-      template_version: TEMPLATE_VERSION,
-      renderer_version: RENDERER_VERSION,
-      recipient_name: input.recipient.name,
-      student_id: input.recipient.studentId || null,
-      program_id: input.program.id || null,
-      program_title: input.program.title,
-      duration: input.program.duration,
-      completion_date: input.completionDate || null,
-      issue_date: input.issueDate,
-      grade: input.grade || null,
-      status: "ISSUED",
-      signatory_id: input.signatory.id || null,
-      signatory_name_snapshot: input.signatory.name,
-      signatory_position_snapshot: input.signatory.position,
-      public_visibility: DEFAULT_PUBLIC_FIELDS_V2,
-      pdf_storage_key: pdfStorageKey,
-      issued_at: new Date().toISOString(),
-      data_snapshot: snapshotEnvelope as unknown as Record<string, unknown>,
-    });
-
-    modules = await db.certificateModules.bulkCreate(
-      input.modules.map((m) => ({
-        certificate_id: targetCert!.id,
-        sort_order: m.order,
-        title: m.title,
-        subtitle: m.subtitle || null,
-      }))
+    if (existingDraft && existingDraft.status === "DRAFT") {
+      const updated = await db.certificates.update(draftId, commitFields);
+      // PGRST116 → the draft vanished between render and commit. Same orphan
+      // treatment as a thrown error: fail loudly, tell the admin to reconcile.
+      if (!updated) {
+        console.error(
+          `[issueCertificate] Draft ${draftId} disappeared before commit for ${certificateNumber} (storage key ${pdfStorageKey}).`
+        );
+        return {
+          success: false,
+          errors: [
+            `Certificate content was generated (number ${certificateNumber}) but the draft record ` +
+              `could not be found to commit. Do not retry with the same data — contact an ` +
+              `administrator to reconcile storage key ${pdfStorageKey}.`,
+          ],
+        };
+      }
+      targetCert = updated;
+      modules = await db.certificateModules.findByCertificateId(draftId);
+    } else {
+      targetCert = await db.certificates.create(commitFields);
+      modules = await db.certificateModules.bulkCreate(
+        input.modules.map((m) => ({
+          certificate_id: targetCert.id,
+          sort_order: m.order,
+          title: m.title,
+          subtitle: m.subtitle || null,
+        }))
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[issueCertificate] DB commit failed after PDF render for ${certificateNumber} ` +
+        `(storage key ${pdfStorageKey}). Do NOT retry the same inputs until reconciled.`,
+      err
     );
+    return {
+      success: false,
+      errors: [
+        `Certificate content was generated (number ${certificateNumber}) but could not be ` +
+          `saved. Do not retry — contact an administrator to reconcile storage key ${pdfStorageKey}.`,
+      ],
+    };
   }
 
-  await logEvent(targetCert!.id, "ISSUED", actorId, {
+  await logEvent(targetCert.id, "ISSUED", actorId, {
     certificateNumber,
     recipientName: input.recipient.name,
     studentId: input.recipient.studentId,
@@ -365,7 +378,7 @@ export const issueCertificate = async (
     verificationUrl,
   });
 
-  return { success: true, certificate: targetCert!, modules };
+  return { success: true, certificate: targetCert, modules };
 };
 
 export const revokeCertificate = async (

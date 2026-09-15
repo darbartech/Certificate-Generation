@@ -11,12 +11,20 @@ import type { AdminUser } from "@/lib/types";
 export const GET = withAdminAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
-    const limit = parseInt(searchParams.get("limit") || "50", 10);
-    const offset = parseInt(searchParams.get("offset") || "0", 10);
+    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "50", 10) || 50, 1), 500);
+    const offset = Math.max(parseInt(searchParams.get("offset") || "0", 10) || 0, 0);
     const status = searchParams.get("status") || undefined;
+    const q = searchParams.get("q") || undefined;
 
-    const certificates = await db.certificates.list({ limit, offset, status });
-    const count = await db.certificates.count({ status });
+    const certificates = await db.certificates.list({ limit, offset, status, q });
+    const count = await db.certificates.count({ status, q });
+
+    const stats = {
+      total: await db.certificates.count({ q }),
+      issued: await db.certificates.count({ statuses: ["ISSUED", "REISSUED"], q }),
+      draft: await db.certificates.count({ status: "DRAFT", q }),
+      revoked: await db.certificates.count({ status: "REVOKED", q }),
+    };
 
     return jsonResponse({
       success: true,
@@ -40,6 +48,7 @@ export const GET = withAdminAuth(async (req: NextRequest) => {
         offset,
         total: count,
       },
+      stats,
     });
   } catch (err) {
     console.error("[GET /api/admin/certificates] failed:", err);

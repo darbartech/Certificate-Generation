@@ -67,11 +67,33 @@ export const inMemoryDb = {
       return null;
     },
 
-    async list(options: { limit?: number; offset?: number; status?: string } = {}): Promise<CertificateRecord[]> {
+    async list(options: { limit?: number; offset?: number; status?: string; q?: string; since?: string; until?: string; dateField?: "created_at" | "issued_at" } = {}): Promise<CertificateRecord[]> {
       const results = Array.from(db.certificates.values());
       let filtered = results;
+      const q = options.q?.trim().toLowerCase();
+      if (q) {
+        const matches = (value: string | null | undefined): boolean =>
+          !!value && value.toLowerCase().includes(q);
+        filtered = results.filter(
+          (c) =>
+            matches(c.recipient_name) ||
+            matches(c.certificate_number) ||
+            matches(c.student_id)
+        );
+      }
       if (options.status) {
-        filtered = results.filter((c) => c.status === options.status);
+        filtered = filtered.filter((c) => c.status === options.status);
+      }
+      const dateField = options.dateField || "created_at";
+      const sinceMs = options.since ? new Date(options.since).getTime() : null;
+      const untilMs = options.until ? new Date(options.until).getTime() : null;
+      if (sinceMs !== null || untilMs !== null) {
+        filtered = filtered.filter((c) => {
+          const ts = new Date((c as unknown as Record<string, string>)[dateField] || c.created_at).getTime();
+          if (sinceMs !== null && ts < sinceMs) return false;
+          if (untilMs !== null && ts >= untilMs) return false;
+          return true;
+        });
       }
       filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       if (options.offset) filtered = filtered.slice(options.offset);
@@ -79,12 +101,38 @@ export const inMemoryDb = {
       return filtered;
     },
 
-    async count(options: { status?: string } = {}): Promise<number> {
+    async count(options: {
+      status?: string;
+      statuses?: string[];
+      since?: string;
+      until?: string;
+      dateField?: "created_at" | "issued_at";
+      q?: string;
+    } = {}): Promise<number> {
       const results = Array.from(db.certificates.values());
-      if (options.status) {
-        return results.filter((c) => c.status === options.status).length;
-      }
-      return results.length;
+      const dateField = options.dateField || "created_at";
+      const sinceMs = options.since ? new Date(options.since).getTime() : null;
+      const untilMs = options.until ? new Date(options.until).getTime() : null;
+      const q = options.q?.trim().toLowerCase();
+      return results.filter((c) => {
+        if (q) {
+          const matches = (value: string | null | undefined): boolean =>
+            !!value && value.toLowerCase().includes(q);
+          if (
+            !matches(c.recipient_name) &&
+            !matches(c.certificate_number) &&
+            !matches(c.student_id)
+          ) {
+            return false;
+          }
+        }
+        if (options.status && c.status !== options.status) return false;
+        if (options.statuses && options.statuses.length > 0 && !options.statuses.includes(c.status)) return false;
+        const ts = new Date((c as unknown as Record<string, string>)[dateField] || c.created_at).getTime();
+        if (sinceMs !== null && ts < sinceMs) return false;
+        if (untilMs !== null && ts >= untilMs) return false;
+        return true;
+      }).length;
     },
   },
 
@@ -126,6 +174,15 @@ export const inMemoryDb = {
     async findByCertificateId(certificateId: string): Promise<CertificateEvent[]> {
       const events = db.certificate_events.get(certificateId) || [];
       return [...events].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    },
+
+    async list(options: { limit?: number; since?: string } = {}): Promise<CertificateEvent[]> {
+      const sinceMs = options.since ? new Date(options.since).getTime() : null;
+      const events = Array.from(db.certificate_events.values())
+        .flat()
+        .filter((e) => (sinceMs === null ? true : new Date(e.created_at).getTime() >= sinceMs))
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      return options.limit ? events.slice(0, options.limit) : events;
     },
   },
 
@@ -174,6 +231,23 @@ export const inMemoryDb = {
       existing.push(record);
       db.course_modules.set(record.course_id, existing);
       return record;
+    },
+
+    async update(id: string, data: Partial<CourseModuleRecord>): Promise<CourseModuleRecord | null> {
+      for (const [courseId, modules] of db.course_modules.entries()) {
+        const idx = modules.findIndex((m) => m.id === id);
+        if (idx !== -1) {
+          const updated = { ...modules[idx], ...data };
+          modules[idx] = updated;
+          db.course_modules.set(courseId, modules);
+          return updated;
+        }
+      }
+      return null;
+    },
+
+    async deleteByCourseId(courseId: string): Promise<void> {
+      db.course_modules.delete(courseId);
     },
   },
 

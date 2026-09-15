@@ -829,7 +829,11 @@ export const renderCertificatePdf = async (
       renderTextInField(page, template.fields.recipientName as any, input.recipient.name, fonts, errors);
 
       // §11 — Dynamic name underlines (rules flanking the diamond)
-      // Formula per spec: ruleSpan = clamp(nameInkWidth + 12mm, 132mm, 190mm)
+      // BUG-13 (Round 5): the reference's rule is SHORTER than the name ink (span ÷ name
+      // width = 0.88), not longer by a fixed padding. An earlier round's `+12mm` additive
+      // formula was internally consistent but never checked against a same-text reference
+      // case — for "AAYARA SHRESTHA" it produced a 173mm span vs. the reference's 142mm.
+      // Formula per Round 5: ruleSpan = clamp(nameInkWidth * 0.88, minRuleSpanMm, maxRuleSpanMm)
       // Rules stop 3.4 mm from the text centre on each side, leaving a gap for the diamond.
       {
         const nameField = template.fields.recipientName as any;
@@ -855,7 +859,30 @@ export const renderCertificatePdf = async (
         }
         const inkWidthMm = fittedInkWidthPt / mmToPt(1);
 
-        const ruleSpanMm = Math.max(132, Math.min(190, inkWidthMm + 12));
+        // Clamp bounds re-derived from the system's own layout constraints (Round 5 §1
+        // task 2) instead of the previous round's round numbers (132 / 190mm), which were
+        // never re-derived from real data:
+        //  - Upper bound: nameField.width IS the hard ceiling on ink width — the shrink
+        //    loop above guarantees fittedInkWidthPt <= maxWidthPt (barring the
+        //    shrink_then_reject overflow case), so a rule can never legitimately need to
+        //    span wider than the field itself, scaled by the same ratio.
+        //  - Lower bound: measured from the shortest realistic name ("A B") set at the
+        //    field's own minFontSize — the smallest ink width the fit loop would ever
+        //    actually produce for a real two-part name — through the same ratio.
+        const RULE_SPAN_RATIO = 0.88;
+        const SHORTEST_REALISTIC_NAME = "A B";
+        const shortestLsPt =
+          lsRaw === 0 ? 0 : (lsRaw / 1000) * nameField.minFontSize;
+        const shortestNameInkWidthMm =
+          measureTracked(SHORTEST_REALISTIC_NAME, nameFont, nameField.minFontSize, shortestLsPt) /
+          mmToPt(1);
+        const minRuleSpanMm = shortestNameInkWidthMm * RULE_SPAN_RATIO;
+        const maxRuleSpanMm = nameField.width * RULE_SPAN_RATIO;
+
+        const ruleSpanMm = Math.max(
+          minRuleSpanMm,
+          Math.min(maxRuleSpanMm, inkWidthMm * RULE_SPAN_RATIO)
+        );
         const centreX = nameField.x + nameField.width / 2;
         const diamondGapMm = 3.4;
         const ruleYMm = 78.2;

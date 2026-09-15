@@ -51,6 +51,21 @@ export const withAdminAuth = (
         return response;
       }
 
+      // Applied here, centrally, so every /api/admin/* route is throttled by
+      // default — new routes get it automatically without remembering to wire
+      // it up. Bucket is keyed by user + IP so a leaked session cookie can't
+      // be scripted into an unlimited flood of authenticated mutations.
+      const rateLimit = validateRateLimit(`${user.id}:${getClientIp(req)}`);
+      if (!rateLimit.allowed) {
+        return NextResponse.json(
+          { success: false, error: "Too many requests. Please slow down." },
+          {
+            status: 429,
+            headers: { "Retry-After": String(Math.ceil((rateLimit.resetAt - Date.now()) / 1000)) },
+          }
+        );
+      }
+
       if (requiredPermission && !checkPermission(user, requiredPermission)) {
         return NextResponse.json(
           { success: false, error: "Insufficient permissions" },

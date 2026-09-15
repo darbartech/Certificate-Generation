@@ -22,6 +22,7 @@ type ApiResponse<T = unknown> = {
   warnings?: string[];
   events?: unknown[];
   pagination?: { limit: number; offset: number; total: number };
+  stats?: { total: number; issued: number; draft: number; revoked: number };
 };
 
 const handleResponse = async <T>(res: Response): Promise<ApiResponse<T>> => {
@@ -75,11 +76,17 @@ export const apiClient = {
     return handleResponse<AdminUser>(res);
   },
 
-  async listCertificates(params: { limit?: number; offset?: number; status?: string } = {}): Promise<ApiResponse<CertificateRecord[]>> {
+  async health(): Promise<ApiResponse<{ useSupabase: boolean; degraded: boolean; circuits: { table: string; open: boolean; failureCount: number; retryAfterMs: number | null }[] }>> {
+    const res = await fetch("/api/admin/health", { credentials: "include", cache: "no-store" });
+    return handleResponse(res);
+  },
+
+  async listCertificates(params: { limit?: number; offset?: number; status?: string; q?: string } = {}): Promise<ApiResponse<CertificateRecord[]>> {
     const qs = new URLSearchParams();
     if (params.limit) qs.set("limit", String(params.limit));
     if (params.offset) qs.set("offset", String(params.offset));
     if (params.status) qs.set("status", params.status);
+    if (params.q) qs.set("q", params.q);
     const res = await fetch(`/api/admin/certificates?${qs.toString()}`, { credentials: "include" });
     return handleResponse<CertificateRecord[]>(res);
   },
@@ -173,9 +180,92 @@ export const apiClient = {
     return handleResponse<(CourseRecord & { modules: CourseModuleRecord[] })[]>(res);
   },
 
+  async createCourse(
+    data: { code: string; title: string; duration: string; modules: Array<{ order: number; title: string; subtitle?: string }> }
+  ): Promise<ApiResponse> {
+    const res = await fetch("/api/admin/courses", {
+      method: "POST",
+      headers: getHeaders(),
+      credentials: "include",
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
+  async updateCourse(
+    id: string,
+    data: {
+      code?: string;
+      title?: string;
+      duration?: string;
+      active?: boolean;
+      modules?: Array<{ order: number; title: string; subtitle?: string }>;
+    }
+  ): Promise<ApiResponse> {
+    const res = await fetch(`/api/admin/courses/${id}`, {
+      method: "PATCH",
+      headers: getHeaders(),
+      credentials: "include",
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
   async listSignatories(): Promise<ApiResponse<SignatoryRecord[]>> {
     const res = await fetch("/api/admin/signatories", { credentials: "include" });
     return handleResponse<SignatoryRecord[]>(res);
+  },
+
+  async createSignatory(data: { name: string; position: string; signatureImage?: string; active?: boolean }): Promise<ApiResponse> {
+    const res = await fetch("/api/admin/signatories", {
+      method: "POST",
+      headers: getHeaders(),
+      credentials: "include",
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
+  async updateSignatory(
+    id: string,
+    data: { name?: string; position?: string; active?: boolean }
+  ): Promise<ApiResponse> {
+    const res = await fetch(`/api/admin/signatories/${id}`, {
+      method: "PATCH",
+      headers: getHeaders(),
+      credentials: "include",
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
+  async getDashboardSummary(): Promise<ApiResponse<unknown>> {
+    const res = await fetch("/api/admin/dashboard/summary", { credentials: "include", cache: "no-store" });
+    return handleResponse(res);
+  },
+
+  async getIssuanceTrend(weeks = 12): Promise<ApiResponse<unknown>> {
+    const res = await fetch(`/api/admin/dashboard/issuance-trend?weeks=${weeks}`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    return handleResponse(res);
+  },
+
+  async getCertificatesByCourse(limit = 5, days = 90): Promise<ApiResponse<unknown>> {
+    const res = await fetch(`/api/admin/dashboard/by-course?limit=${limit}&days=${days}`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    return handleResponse(res);
+  },
+
+  async getRecentActivity(limit = 15): Promise<ApiResponse<unknown>> {
+    const res = await fetch(`/api/admin/dashboard/activity?limit=${limit}`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    return handleResponse(res);
   },
 
   async verifyToken(token: string): Promise<PublicVerificationResponse> {

@@ -11,6 +11,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [degraded, setDegraded] = useState(false);
+  const [healthChecked, setHealthChecked] = useState(false);
 
   const validateSession = useCallback(async (): Promise<boolean> => {
     const stored = localStorage.getItem("dt_admin");
@@ -28,9 +30,24 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     return false;
   }, []);
 
+  const checkHealth = useCallback(async (): Promise<void> => {
+    try {
+      const res = await apiClient.health();
+      if (res.success && "degraded" in res) {
+        setDegraded(Boolean((res as unknown as { degraded?: boolean }).degraded));
+      }
+    } catch {
+      // Auth failure / network error on the health probe is handled by the
+      // session flow; don't flash a banner for it.
+    } finally {
+      setHealthChecked(true);
+    }
+  }, []);
+
   useEffect(() => {
     if (pathname === "/admin/login") {
       setLoading(false);
+      setHealthChecked(true);
       return;
     }
 
@@ -51,6 +68,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         router.push("/admin/login");
       }
       setLoading(false);
+      if (ok) {
+        await checkHealth();
+      }
     };
     run();
 
@@ -58,7 +78,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       cancelled = true;
       window.removeEventListener("dt-auth-expired", onAuthExpired);
     };
-  }, [pathname, router, validateSession]);
+  }, [pathname, router, validateSession, checkHealth]);
 
   if (pathname === "/admin/login") {
     return children;
@@ -76,8 +96,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   const navLinks = [
+    { href: "/admin", label: "Dashboard", icon: "📊", exact: true },
     { href: "/admin/certificates", label: "Certificates", icon: "📄" },
     { href: "/admin/certificates/new", label: "New Certificate", icon: "➕" },
+    { href: "/admin/courses", label: "Courses", icon: "🗂" },
+    { href: "/admin/signatories", label: "Signatories", icon: "✍️" },
     { href: "/verify", label: "Verify Certificate", icon: "🔍" },
   ];
 
@@ -110,10 +133,14 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                   key={link.href}
                   href={link.href}
                   className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                    pathname === link.href ||
-                    (link.href !== "/admin/certificates/new" && pathname?.startsWith(link.href) && link.href.length > 3)
-                      ? "bg-brand-navy/10 text-brand-navy font-medium"
-                      : "text-gray-600 hover:bg-gray-100"
+                    link.exact
+                      ? pathname === link.href
+                        ? "bg-brand-navy/10 text-brand-navy font-medium"
+                        : "text-gray-600 hover:bg-gray-100"
+                      : pathname === link.href ||
+                        (link.href !== "/admin/certificates/new" && pathname?.startsWith(link.href) && link.href.length > 3)
+                        ? "bg-brand-navy/10 text-brand-navy font-medium"
+                        : "text-gray-600 hover:bg-gray-100"
                   }`}
                 >
                   <span className="mr-1.5">{link.icon}</span>
@@ -145,6 +172,26 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
+
+      {healthChecked && degraded && (
+        <div className="bg-amber-50 border-b border-amber-200" role="alert">
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-4">
+            <p className="text-sm text-amber-900">
+              <span className="font-semibold">⚠ Running in degraded/offline mode</span>
+              <span className="text-amber-800">
+                {" "}— certificates issued now will not be saved permanently. Contact engineering.
+              </span>
+            </p>
+            <button
+              type="button"
+              onClick={() => { void checkHealth(); }}
+              className="text-xs font-medium text-amber-800 underline underline-offset-2 hover:text-amber-950 whitespace-nowrap"
+            >
+              Refresh status
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">{children}</div>
     </div>
