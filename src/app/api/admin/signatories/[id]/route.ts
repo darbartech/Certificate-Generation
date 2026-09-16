@@ -34,7 +34,12 @@ export const PATCH = withAdminAuth("manageTemplates", async (req: NextRequest, {
 
     const body = await req.json();
 
-    const fields: Partial<{ name: string; position: string; active: boolean }> = {};
+    const fields: Partial<{
+      name: string;
+      position: string;
+      active: boolean;
+      is_default_secondary: boolean;
+    }> = {};
     for (const key of ["name", "position"] as const) {
       if (typeof body[key] === "string" && body[key].trim().length > 0) {
         fields[key] = body[key].trim();
@@ -42,6 +47,18 @@ export const PATCH = withAdminAuth("manageTemplates", async (req: NextRequest, {
     }
     if (typeof body.active === "boolean") {
       fields.active = body.active;
+    }
+    if (typeof body.isDefaultSecondary === "boolean") {
+      fields.is_default_secondary = body.isDefaultSecondary;
+    }
+
+    if (fields.is_default_secondary) {
+      const allSignatories = await db.signatories.list(false);
+      for (const s of allSignatories) {
+        if (s.id !== signatoryId && s.is_default_secondary) {
+          await db.signatories.update(s.id, { is_default_secondary: false });
+        }
+      }
     }
 
     if (Object.keys(fields).length === 0) {

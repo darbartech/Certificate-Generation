@@ -16,7 +16,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-gray-50">{children}</body>
+      <head>
+        <meta name="theme-color" content="#0a2463" />
+      </head>
+      <body className="min-h-screen bg-surface-muted font-sans">{children}</body>
     </html>
   );
 }

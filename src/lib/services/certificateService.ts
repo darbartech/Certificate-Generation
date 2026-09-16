@@ -35,8 +35,8 @@ const ISSUER_NAME = "DarbarTech Group of Technology";
 // or delete this constant and drop the ?? fallback inside buildRenderInput.
 const DEFAULT_SECONDARY_SIGNATORY: SignatoryRecord = {
   id: "default-managing-director",
-  name: "Nirmala Shrestha",
-  position: "Managing director",
+  name: "Mohan Shahi",
+  position: "Managing Director",
   active: true,
 };
 

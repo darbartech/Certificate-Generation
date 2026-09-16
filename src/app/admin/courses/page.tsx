@@ -2,8 +2,20 @@
 
 import { useEffect, useState, useCallback } from "react";
 import apiClient from "@/lib/api/client";
-import type { CourseRecord, CourseModuleRecord } from "@/lib/types";
+import type { CourseRecord, CourseModuleRecord, CertificateModule } from "@/lib/types";
 import { DARBARTECH_CERTIFICATE_TEMPLATE_V2 } from "@/lib/templates/darbartech-certificate-v2";
+import { collectModuleFitIssues, type ModuleFitIssue } from "@/lib/renderer/moduleFit";
+import {
+  Alert,
+  Badge,
+  Button,
+  EmptyState,
+  Icon,
+  Modal,
+  PageHeader,
+  Spinner,
+  StatTile,
+} from "@/components/ui";
 
 type CourseWithModules = CourseRecord & { modules: CourseModuleRecord[] };
 
@@ -24,8 +36,23 @@ export default function CoursesPage() {
   const [title, setTitle] = useState("");
   const [duration, setDuration] = useState("");
   const [moduleRows, setModuleRows] = useState<ModuleDraft[]>(emptyModules(REQUIRED_MODULES.minCount));
+  const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const runModuleFitCheck = useCallback((rows: ModuleDraft[]) => {
+    const modules: CertificateModule[] = rows
+      .filter((row) => row.title.trim().length > 0)
+      .map((row, i) => ({
+        order: i + 1,
+        title: row.title.trim(),
+        subtitle: row.subtitle.trim() || undefined,
+      }));
+    const issues = collectModuleFitIssues(DARBARTECH_CERTIFICATE_TEMPLATE_V2, modules);
+    setModuleFitIssues(issues);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,12 +72,20 @@ export default function CoursesPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (modalOpen) {
+      runModuleFitCheck(moduleRows);
+    }
+  }, [moduleRows, modalOpen, runModuleFitCheck]);
+
   const openCreate = () => {
     setEditing(null);
     setCode("");
     setTitle("");
     setDuration("");
-    setModuleRows(emptyModules(REQUIRED_MODULES.minCount));
+    const initialRows = emptyModules(REQUIRED_MODULES.minCount);
+    setModuleRows(initialRows);
+    setModuleFitIssues([]);
     setFormError(null);
     setModalOpen(true);
   };
@@ -60,11 +95,27 @@ export default function CoursesPage() {
     setCode(course.code);
     setTitle(course.title);
     setDuration(course.duration);
-    setModuleRows(
+    const initialRows =
       modules.length > 0
         ? modules.map((m) => ({ order: m.sort_order, title: m.title, subtitle: m.subtitle || "" }))
-        : emptyModules(REQUIRED_MODULES.minCount)
-    );
+        : emptyModules(REQUIRED_MODULES.minCount);
+    setModuleRows(initialRows);
+    setModuleFitIssues([]);
+    setFormError(null);
+    setModalOpen(true);
+  };
+
+  const openDuplicate = (course: CourseRecord, modules: CourseModuleRecord[]) => {
+    setEditing(null);
+    setCode("");
+    setTitle(`${course.title} (copy)`);
+    setDuration(course.duration);
+    const initialRows =
+      modules.length > 0
+        ? modules.map((m) => ({ order: m.sort_order, title: m.title, subtitle: m.subtitle || "" }))
+        : emptyModules(REQUIRED_MODULES.minCount);
+    setModuleRows(initialRows);
+    setModuleFitIssues([]);
     setFormError(null);
     setModalOpen(true);
   };
@@ -86,9 +137,22 @@ export default function CoursesPage() {
     const modules = moduleRows
       .filter((row) => row.title.trim().length > 0)
       .map((row, i) => ({ order: i + 1, title: row.title.trim(), subtitle: row.subtitle.trim() || undefined }));
-    if (modules.length === 0) {
-      setFormError("Add at least one course module.");
-      return;
+
+    const { minCount, maxCount } = REQUIRED_MODULES;
+    if (minCount === maxCount) {
+      if (modules.length !== minCount) {
+        setFormError(
+          `This template requires exactly ${minCount} active modules — you have ${modules.length}`
+        );
+        return;
+      }
+    } else {
+      if (modules.length < minCount || modules.length > maxCount) {
+        setFormError(
+          `This template requires between ${minCount} and ${maxCount} active modules — you have ${modules.length}`
+        );
+        return;
+      }
     }
 
     setSaving(true);
@@ -118,10 +182,58 @@ export default function CoursesPage() {
       await apiClient.updateCourse(course.id, { active: !course.active });
       await load();
     } catch {
-      // A transient failure leaves the row unchanged; reloading is the fallback.
       await load();
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === courses.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(courses.map((c) => c.id)));
+    }
+  };
+
+  const bulkActivate = async () => {
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(selectedIds);
+      for (const id of ids) {
+        await apiClient.updateCourse(id, { active: true });
+      }
+      setSelectedIds(new Set());
+      await load();
+    } catch {
+      await load();
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const bulkDeactivate = async () => {
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(selectedIds);
+      for (const id of ids) {
+        await apiClient.updateCourse(id, { active: false });
+      }
+      setSelectedIds(new Set());
+      await load();
+    } catch {
+      await load();
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -132,64 +244,86 @@ export default function CoursesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Courses</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Manage catalog courses and their course modules
-          </p>
-        </div>
-        <button type="button" onClick={openCreate} className="btn-primary">
-          <span className="mr-2">+</span> New Course
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Catalog"
+        title="Courses"
+        description="Manage catalog courses and their course modules"
+        actions={
+          <Button iconLeft="plus" onClick={openCreate}>
+            New Course
+          </Button>
+        }
+      />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="card card-body">
-          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Total</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{courses.length}</p>
-        </div>
-        <div className="card card-body">
-          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Active</p>
-          <p className="text-2xl font-bold text-emerald-600 mt-1">{activeCount}</p>
-        </div>
-        <div className="card card-body">
-          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Inactive</p>
-          <p className="text-2xl font-bold text-gray-600 mt-1">{courses.length - activeCount}</p>
-        </div>
-        <div className="card card-body">
-          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">
-            Ready to issue ({REQUIRED_MODULES.maxCount} modules)
-          </p>
-          <p className="text-2xl font-bold text-brand-navy mt-1">{validCount}</p>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
+        <StatTile icon="courses" accent="navy" label="Total" value={courses.length} />
+        <StatTile icon="check" accent="green" label="Active" value={activeCount} />
+        <StatTile icon="remove" accent="gray" label="Inactive" value={courses.length - activeCount} />
+        <StatTile
+          icon="award"
+          accent="cyan"
+          label={`Ready to issue (${REQUIRED_MODULES.maxCount} modules)`}
+          value={validCount}
+        />
       </div>
 
       <div className="card overflow-hidden">
         <div className="card-header flex items-center justify-between gap-4">
-          <h2 className="font-semibold text-gray-900">Course catalog</h2>
-          <p className="text-xs text-gray-400 whitespace-nowrap">
-            {courses.length} {courses.length === 1 ? "course" : "courses"}
-          </p>
+          {selectedIds.size > 0 ? (
+            <div className="flex items-center justify-between w-full gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-900">
+                  {selectedIds.size} selected
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" disabled={bulkBusy} onClick={bulkActivate}>
+                  {bulkBusy ? <Icon name="refresh" size={13} className="animate-spin" /> : null}
+                  Activate selected
+                </Button>
+                <Button variant="secondary" size="sm" disabled={bulkBusy} onClick={bulkDeactivate}>
+                  {bulkBusy ? <Icon name="refresh" size={13} className="animate-spin" /> : null}
+                  Deactivate selected
+                </Button>
+                <Button variant="ghost" size="sm" disabled={bulkBusy} onClick={() => setSelectedIds(new Set())}>
+                  Clear
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">Course catalog</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {courses.length} {courses.length === 1 ? "course" : "courses"}
+              </p>
+            </div>
+          )}
         </div>
 
         {loading ? (
-          <div className="py-20 text-center text-gray-500">
-            <span className="spinner w-6 h-6 border-brand-navy border-t-transparent"></span>
-            <p className="mt-3 text-sm">Loading courses...</p>
-          </div>
+          <Spinner label="Loading courses..." />
         ) : courses.length === 0 ? (
-          <div className="py-20 text-center">
-            <p className="text-gray-500 mb-4">No courses found.</p>
-            <button type="button" onClick={openCreate} className="btn-primary">
-              Create your first course
-            </button>
-          </div>
+          <EmptyState
+            icon="courses"
+            title="No courses yet"
+            message="Add catalog courses so certificates can be issued against them."
+            actionLabel="Create your first course"
+            onAction={openCreate}
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead>
                 <tr>
+                  <th className="table-header w-10">
+                    <input
+                      type="checkbox"
+                      className="cursor-pointer accent-brand-navy"
+                      checked={selectedIds.size === courses.length && courses.length > 0}
+                      onChange={toggleSelectAll}
+                      aria-label="Select all courses"
+                    />
+                  </th>
                   <th className="table-header">Code</th>
                   <th className="table-header">Title</th>
                   <th className="table-header">Duration</th>
@@ -201,10 +335,20 @@ export default function CoursesPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {courses.map((course) => {
                   const moduleOk = course.modules.length === REQUIRED_MODULES.maxCount;
+                  const isSelected = selectedIds.has(course.id);
                   return (
-                    <tr key={course.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={course.id} className={`transition-colors ${isSelected ? "bg-brand-navy/5" : "hover:bg-surface-muted"}`}>
+                      <td className="table-cell w-10">
+                        <input
+                          type="checkbox"
+                          className="cursor-pointer accent-brand-navy"
+                          checked={isSelected}
+                          onChange={() => toggleSelected(course.id)}
+                          aria-label={`Select course ${course.code}`}
+                        />
+                      </td>
                       <td className="table-cell">
-                        <span className="font-mono text-xs font-medium text-brand-navy">
+                        <span className="font-mono text-xs font-semibold text-brand-navy">
                           {course.code}
                         </span>
                       </td>
@@ -213,43 +357,37 @@ export default function CoursesPage() {
                       </td>
                       <td className="table-cell text-sm text-gray-500">{course.duration}</td>
                       <td className="table-cell">
-                        <span
-                          className={`badge ${moduleOk ? "badge-issued" : "badge-preview"}`}
-                          title={
-                            moduleOk
-                              ? `${course.modules.length} active modules — matches the certificate template`
-                              : `${course.modules.length} active modules — certificate template requires ${REQUIRED_MODULES.maxCount}`
-                          }
-                        >
+                        <Badge tone={moduleOk ? "issued" : "cyan"}>
                           {course.modules.length}/{REQUIRED_MODULES.maxCount}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="table-cell">
-                        <span className={`badge ${course.active ? "badge-issued" : "badge-draft"}`}>
+                        <Badge tone={course.active ? "green" : "slate"} dot>
                           {course.active ? "Active" : "Inactive"}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="table-cell text-right">
                         <div className="inline-flex items-center gap-2">
-                          <button
-                            type="button"
-                            className="btn-secondary px-2.5 py-1 text-xs"
-                            onClick={() => openEdit(course, course.modules)}
-                          >
+                          <Button variant="secondary" size="sm" onClick={() => openDuplicate(course, course.modules)}>
+                            Duplicate
+                          </Button>
+                          <Button variant="secondary" size="sm" iconLeft="edit" onClick={() => openEdit(course, course.modules)}>
                             Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-secondary px-2.5 py-1 text-xs"
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             disabled={busyId === course.id}
                             onClick={() => toggleActive(course)}
                           >
-                            {busyId === course.id
-                              ? "…"
-                              : course.active
-                                ? "Deactivate"
-                                : "Activate"}
-                          </button>
+                            {busyId === course.id ? (
+                              <Icon name="refresh" size={13} className="animate-spin" />
+                            ) : course.active ? (
+                              "Deactivate"
+                            ) : (
+                              "Activate"
+                            )}
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -261,169 +399,157 @@ export default function CoursesPage() {
         )}
       </div>
 
-      {modalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 py-10"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => {
-            if (!saving) setModalOpen(false);
-          }}
-        >
-          <div className="card w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="card-header flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900">
-                {editing ? `Edit course — ${editing.code}` : "New course"}
-              </h2>
-              <button
-                type="button"
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
-                disabled={saving}
-                onClick={() => setModalOpen(false)}
-                aria-label="Close"
-              >
-                ×
-              </button>
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editing ? `Edit course — ${editing.code}` : "New course"}
+        subtitle="Program title, duration and the modules displayed on the certificate"
+        maxWidth="max-w-2xl"
+        closeDisabled={saving}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setModalOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : editing ? "Save changes" : "Create course"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label" htmlFor="course-code">
+                Course code
+              </label>
+              <input
+                id="course-code"
+                className="input"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="e.g. PCDSP-002"
+              />
             </div>
-
-            <div className="card-body space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label" htmlFor="course-code">
-                    Course code
-                  </label>
-                  <input
-                    id="course-code"
-                    className="input"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    placeholder="e.g. PCDSP-002"
-                  />
-                </div>
-                <div>
-                  <label className="label" htmlFor="course-duration">
-                    Duration
-                  </label>
-                  <input
-                    id="course-duration"
-                    className="input"
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    placeholder="e.g. 3 Months"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="label" htmlFor="course-title">
-                  Title
-                </label>
-                <input
-                  id="course-title"
-                  className="input"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Professional Computer & Digital Skills Program"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="label mb-0">
-                    Course modules{" "}
-                    <span className="font-normal text-gray-400">
-                      (displayed on the certificate; template requires{" "}
-                      {REQUIRED_MODULES.minCount === REQUIRED_MODULES.maxCount
-                        ? `exactly ${REQUIRED_MODULES.maxCount}`
-                        : `${REQUIRED_MODULES.minCount}–${REQUIRED_MODULES.maxCount}`}
-                      )
-                    </span>
-                  </label>
-                  <button
-                    type="button"
-                    className="btn-secondary px-2.5 py-1 text-xs"
-                    onClick={() =>
-                      setModuleRows((rows) => [
-                        ...rows,
-                        { order: rows.length + 1, title: "", subtitle: "" },
-                      ])
-                    }
-                  >
-                    + Add row
-                  </button>
-                </div>
-
-                {moduleRows.length !== REQUIRED_MODULES.maxCount && (
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-2">
-                    This course has {moduleRows.length} module row
-                    {moduleRows.length === 1 ? "" : "s"} (active rows saved) — certificates for it
-                    will still be flagged on the dashboard until it matches the template
-                    requirement of {REQUIRED_MODULES.maxCount}.
-                  </p>
-                )}
-
-                <div className="space-y-2">
-                  {moduleRows.map((row, i) => (
-                    <div
-                      key={`${i}-${row.order}`}
-                      className="grid grid-cols-1 sm:grid-cols-[80px_1fr_1fr_auto] gap-2 items-start"
-                    >
-                      <div>
-                        <p className="sr-only">Order {i + 1}</p>
-                        <div className="h-[38px] flex items-center px-2 text-xs font-medium text-gray-500">
-                          {String(i + 1).padStart(2, "0")}
-                        </div>
-                      </div>
-                      <input
-                        className="input"
-                        value={row.title}
-                        onChange={(e) => setRow(i, { title: e.target.value })}
-                        placeholder="Module title"
-                      />
-                      <input
-                        className="input"
-                        value={row.subtitle}
-                        onChange={(e) => setRow(i, { subtitle: e.target.value })}
-                        placeholder="Subtitle (optional)"
-                      />
-                      <button
-                        type="button"
-                        className="btn-secondary px-2.5 py-1 text-xs whitespace-nowrap"
-                        disabled={moduleRows.length <= 1}
-                        onClick={() =>
-                          setModuleRows((rows) => rows.filter((_, idx) => idx !== i))
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {formError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                  {formError}
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  disabled={saving}
-                  onClick={() => setModalOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button type="button" className="btn-primary" disabled={saving} onClick={handleSave}>
-                  {saving ? "Saving..." : editing ? "Save changes" : "Create course"}
-                </button>
-              </div>
+            <div>
+              <label className="label" htmlFor="course-duration">
+                Duration
+              </label>
+              <input
+                id="course-duration"
+                className="input"
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                placeholder="e.g. 3 Months"
+              />
             </div>
           </div>
+
+          <div>
+            <label className="label" htmlFor="course-title">
+              Title
+            </label>
+            <input
+              id="course-title"
+              className="input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Professional Computer & Digital Skills Program"
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="label mb-0">
+                Course modules{" "}
+                <span className="font-normal text-gray-400">
+                  (displayed on the certificate; template requires{" "}
+                  {REQUIRED_MODULES.minCount === REQUIRED_MODULES.maxCount
+                    ? `exactly ${REQUIRED_MODULES.maxCount}`
+                    : `${REQUIRED_MODULES.minCount}–${REQUIRED_MODULES.maxCount}`}
+                  )
+                </span>
+              </label>
+              <Button
+                variant="secondary"
+                size="sm"
+                iconLeft="plus"
+                onClick={() =>
+                  setModuleRows((rows) => [
+                    ...rows,
+                    { order: rows.length + 1, title: "", subtitle: "" },
+                  ])
+                }
+              >
+                Add row
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              {moduleRows.map((row, i) => {
+                const order = i + 1;
+                const titleIssues = moduleFitIssues.filter(
+                  (fi) => fi.order === order && fi.field.includes("Title")
+                );
+                const subtitleIssues = moduleFitIssues.filter(
+                  (fi) => fi.order === order && fi.field.includes("Subtitle")
+                );
+                return (
+                  <div key={`${i}-${row.order}`} className="rounded-lg border border-gray-200 bg-surface-muted/40 p-3 space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-[56px_1fr_1fr_auto] gap-2 items-start">
+                      <div>
+                        <p className="sr-only">Order {order}</p>
+                        <div className="h-[38px] flex items-center text-xs font-bold text-brand-navy tabular-nums">
+                          {String(order).padStart(2, "0")}
+                        </div>
+                      </div>
+                      <div>
+                        <input
+                          className="input"
+                          value={row.title}
+                          onChange={(e) => setRow(i, { title: e.target.value })}
+                          placeholder="Module title"
+                        />
+                        {titleIssues.map((fi, idx) => (
+                          <p key={`t-${idx}`} className={`mt-1 text-xs ${fi.hard ? "text-red-600" : "text-amber-700"}`}>
+                            {fi.reason}
+                          </p>
+                        ))}
+                      </div>
+                      <div>
+                        <input
+                          className="input"
+                          value={row.subtitle}
+                          onChange={(e) => setRow(i, { subtitle: e.target.value })}
+                          placeholder="Subtitle (optional)"
+                        />
+                        {subtitleIssues.map((fi, idx) => (
+                          <p key={`s-${idx}`} className={`mt-1 text-xs ${fi.hard ? "text-red-600" : "text-amber-700"}`}>
+                            {fi.reason}
+                          </p>
+                        ))}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        iconLeft="remove"
+                        disabled={moduleRows.length <= 1}
+                        onClick={() => setModuleRows((rows) => rows.filter((_, idx) => idx !== i))}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {formError && (
+            <Alert variant="error" title={formError} />
+          )}
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

@@ -32,6 +32,7 @@ export type Signatory = {
   position: string;
   signatureImage?: string;
   active?: boolean;
+  isDefaultSecondary?: boolean;
 };
 
 export type Grade = {
@@ -144,6 +145,7 @@ export type SignatoryRecord = {
   position: string;
   signature_storage_key?: string | null;
   active: boolean;
+  is_default_secondary?: boolean;
 };
 
 export type TextRun = {

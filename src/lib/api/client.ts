@@ -216,7 +216,7 @@ export const apiClient = {
     return handleResponse<SignatoryRecord[]>(res);
   },
 
-  async createSignatory(data: { name: string; position: string; signatureImage?: string; active?: boolean }): Promise<ApiResponse> {
+  async createSignatory(data: { name: string; position: string; signatureImage?: string; active?: boolean; isDefaultSecondary?: boolean }): Promise<ApiResponse> {
     const res = await fetch("/api/admin/signatories", {
       method: "POST",
       headers: getHeaders(),
@@ -228,7 +228,7 @@ export const apiClient = {
 
   async updateSignatory(
     id: string,
-    data: { name?: string; position?: string; active?: boolean }
+    data: { name?: string; position?: string; active?: boolean; isDefaultSecondary?: boolean }
   ): Promise<ApiResponse> {
     const res = await fetch(`/api/admin/signatories/${id}`, {
       method: "PATCH",

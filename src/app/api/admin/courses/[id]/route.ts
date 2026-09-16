@@ -3,8 +3,29 @@ import { z } from "zod";
 import { withAdminAuth, jsonResponse, errorResponse } from "@/lib/middleware/auth";
 import { db, seedDatabase } from "@/lib/database";
 import { moduleSchema } from "@/lib/validation/schemas";
+import { DARBARTECH_CERTIFICATE_TEMPLATE_V2 } from "@/lib/templates/darbartech-certificate-v2";
 
-const courseModulesPatchSchema = z.array(moduleSchema);
+const courseModulesPatchSchema = z
+  .array(moduleSchema)
+  .superRefine((val, ctx) => {
+    const activeModules = val.filter((m) => m.title.trim().length > 0);
+    const { minCount, maxCount } = DARBARTECH_CERTIFICATE_TEMPLATE_V2.moduleConstraints;
+    if (minCount === maxCount) {
+      if (activeModules.length !== minCount) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `This template requires exactly ${minCount} active modules — you have ${activeModules.length}`,
+        });
+      }
+    } else {
+      if (activeModules.length < minCount || activeModules.length > maxCount) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `This template requires between ${minCount} and ${maxCount} active modules — you have ${activeModules.length}`,
+        });
+      }
+    }
+  });
 
 export const GET = withAdminAuth(async (_req: NextRequest, { params }) => {
   try {
@@ -59,7 +80,9 @@ export const PATCH = withAdminAuth("manageTemplates", async (req: NextRequest, {
         return NextResponse.json(
           {
             success: false,
-            errors: parsed.error.issues.map((i) => `Module ${i.path[0] ?? 0}: ${i.message}`),
+            errors: parsed.error.issues.map((i) =>
+              i.path.length > 0 ? `Module ${i.path[0]}: ${i.message}` : i.message
+            ),
           },
           { status: 400 }
         );

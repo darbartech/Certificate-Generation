@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Logo, Icon } from "@/components/ui";
 
 export default function HomePage() {
   return (
@@ -6,23 +7,21 @@ export default function HomePage() {
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md border-2 border-brand-navy flex items-center justify-center bg-gray-50">
-              <span className="text-brand-navy font-bold text-lg">D</span>
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-brand-navy">DarbarTech</h1>
-              <p className="text-xs text-gray-500">Certificate System</p>
-            </div>
+            <Logo size={40} />
           </div>
           <nav className="flex items-center gap-4">
             <Link
               href="/verify"
-              className="text-sm text-gray-600 hover:text-brand-navy transition-colors"
+              className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-brand-navy transition-colors"
             >
+              <Icon name="verify" size={16} />
               Verify Certificate
             </Link>
-            <Link href="/admin" className="btn-primary text-sm">
-              Admin Login
+            <Link href="/admin">
+              <span className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-brand-navy text-white hover:bg-brand-blue transition-colors">
+                <Icon name="lock" size={15} />
+                Admin Login
+              </span>
             </Link>
           </nav>
         </div>
@@ -35,10 +34,10 @@ export default function HomePage() {
             <span className="text-xs font-medium text-brand-navy">Official Certificate Verification</span>
           </div>
 
-          <h2 className="text-4xl sm:text-5xl font-bold text-brand-navy mb-6 tracking-tight">
+          <h2 className="text-4xl sm:text-5xl font-display font-bold text-brand-navy mb-6 tracking-tight">
             Programmable Certificate
             <br />
-            <span style={{ color: "#c9a227" }}>Generation System</span>
+            <span className="text-brand-gold">Generation System</span>
           </h2>
 
           <p className="text-lg text-gray-600 mb-10 max-w-2xl mx-auto leading-relaxed">

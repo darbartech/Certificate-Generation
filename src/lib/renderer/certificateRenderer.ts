@@ -1007,8 +1007,8 @@ export const renderCertificatePdf = async (
       renderTextInField(page, template.fields.issueDateValue as any, formatCertificateDate(input.issueDate), fonts, errors);
       renderTextInField(page, template.fields.signatory1Label as any, "Authorized Signatory", fonts, errors);
       renderTextInField(page, template.fields.signatory1Name as any, input.signatory.name, fonts, errors);
-      const sig2Name = (input.signatory as any).signatory2?.name || "Nirmala Shrestha";
-      const sig2Title = (input.signatory as any).signatory2?.position || "Managing director";
+      const sig2Name = (input.signatory as any).signatory2?.name || "Mohan Shahi";
+      const sig2Title = (input.signatory as any).signatory2?.position || "Managing Director";
       renderTextInField(page, template.fields.signatory2Label as any, sig2Title, fonts, errors);
       renderTextInField(page, template.fields.signatory2Name as any, sig2Name, fonts, errors);
 

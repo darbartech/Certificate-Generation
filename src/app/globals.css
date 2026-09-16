@@ -4,8 +4,17 @@
 
 :root {
   --foreground-rgb: 26, 26, 46;
-  --background-start-rgb: 250, 250, 252;
+  --background-start-rgb: 248, 249, 252;
   --background-end-rgb: 255, 255, 255;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd3e1 transparent;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
@@ -18,12 +27,50 @@ body {
     rgb(var(--background-start-rgb));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+::selection {
+  background-color: rgba(62, 146, 204, 0.22);
+  color: #0a2463;
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid #3e92cc;
+    outline-offset: 2px;
+  }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+
+  /* Certificate-adjacent moments only: recipient name, confirmation, verify headline */
+  .font-display {
+    font-family: Georgia, Cambria, "Times New Roman", Times, serif;
+  }
+
+  /* Echo of the logo's tagline motif — uppercase, tracked, rule-flanked eyebrow */
+  .eyebrow {
+    @apply text-eyebrow font-medium uppercase text-ink-faint tracking-[0.14em];
+  }
+
+  .eyebrow-rules {
+    @apply eyebrow inline-flex items-center gap-2.5;
+  }
+  .eyebrow-rules::before,
+  .eyebrow-rules::after {
+    content: "";
+    @apply block h-px w-6 bg-slate-300;
+  }
+
+  /* Tabular numerals for stats/amounts/score cells */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
   .certificate-border {
     border-image: linear-gradient(135deg, #0a2463 0%, #c9a227 50%, #0a2463 100%) 1;
   }
@@ -31,31 +78,31 @@ body {
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-primary {
-    @apply btn bg-brand-navy text-white hover:bg-brand-blue focus:ring-brand-navy;
+    @apply btn bg-brand-navy text-white hover:bg-brand-blue focus-visible:ring-brand-navy;
   }
   .btn-secondary {
-    @apply btn bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300;
+    @apply btn bg-white border border-gray-300 text-gray-700 hover:bg-slate-50 hover:border-gray-400 focus-visible:ring-gray-300;
   }
   .btn-danger {
-    @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
+    @apply btn bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500;
   }
   .btn-success {
-    @apply btn bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500;
+    @apply btn bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500;
   }
   .btn-gold {
-    @apply btn bg-brand-gold text-white hover:opacity-90 focus:ring-brand-gold;
+    @apply btn bg-brand-gold text-white hover:opacity-90 focus-visible:ring-brand-gold;
   }
   .input {
-    @apply block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 text-sm border focus:border-brand-blue focus:ring focus:ring-brand-cyan focus:ring-opacity-20 disabled:bg-gray-50 disabled:text-gray-500;
+    @apply block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 text-sm border bg-white focus:border-brand-blue focus:ring focus:ring-brand-cyan focus:ring-opacity-20 disabled:bg-gray-50 disabled:text-gray-500 transition-colors duration-150;
   }
   .label {
     @apply block text-sm font-medium text-gray-700 mb-1;
   }
   .card {
-    @apply bg-white rounded-lg border border-gray-200 shadow-sm;
+    @apply bg-white rounded-lg border border-gray-200 shadow-card;
   }
   .card-header {
     @apply px-6 py-4 border-b border-gray-200;
@@ -67,13 +114,13 @@ body {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
   .badge-draft {
-    @apply bg-gray-100 text-gray-800;
+    @apply bg-slate-100 text-slate-700;
   }
   .badge-preview {
-    @apply bg-blue-100 text-blue-800;
+    @apply bg-brand-cyan/10 text-brand-blue;
   }
   .badge-issued {
-    @apply bg-emerald-100 text-emerald-800;
+    @apply bg-brand-gold/15 text-brand-gold;
   }
   .badge-revoked {
     @apply bg-red-100 text-red-800;
@@ -91,6 +138,6 @@ body {
     @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
   }
   .table-header {
-    @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50;
+    @apply px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider bg-surface-muted;
   }
 }

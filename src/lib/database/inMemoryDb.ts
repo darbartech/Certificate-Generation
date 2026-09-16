@@ -294,9 +294,10 @@ export const seedDefaultData = async () => {
   const existingSignatories = await inMemoryDb.signatories.list(false);
   if (existingSignatories.length === 0) {
     await inMemoryDb.signatories.create({
-      name: "Rajesh Darbar",
+      name: "Mohan Shahi",
       position: "Director, DarbarTech Group of Technology",
       active: true,
+      is_default_secondary: true,
     });
     await inMemoryDb.signatories.create({
       name: "Admin",

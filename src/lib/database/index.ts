@@ -208,9 +208,10 @@ async function ensureCanonicalCourses() {
   const allSignatories = await db.signatories.list(false);
   if (allSignatories.length === 0) {
     await db.signatories.create({
-      name: "Rajesh Darbar",
+      name: "Mohan Shahi",
       position: "Director, DarbarTech Group of Technology",
       active: true,
+      is_default_secondary: true,
     });
     await db.signatories.create({
       name: "Admin",
@@ -271,7 +272,7 @@ export const db = {
     create: async (
       data: Omit<CertificateRecord, "id" | "created_at" | "updated_at">
     ): Promise<CertificateRecord> => {
-      if (usingSupabase("certificates")) {
+      if (!(await courseCatalogInMemory()) && usingSupabase("certificates")) {
         try {
           const { data: result, error } = await supabaseAdmin!.from("certificates")
             .insert(data)
@@ -288,7 +289,7 @@ export const db = {
     },
 
     update: async (id: string, data: Partial<CertificateRecord>): Promise<CertificateRecord | null> => {
-      if (usingSupabase("certificates")) {
+      if (!(await courseCatalogInMemory()) && usingSupabase("certificates")) {
         try {
           const { data: result, error } = await supabaseAdmin!.from("certificates")
             .update(data)
@@ -313,7 +314,7 @@ export const db = {
     },
 
     findById: async (id: string): Promise<CertificateRecord | null> => {
-      if (usingSupabase("certificates")) {
+      if (!(await courseCatalogInMemory()) && usingSupabase("certificates")) {
         try {
           const { data, error } = await supabaseAdmin!.from("certificates")
             .select("*")
@@ -333,7 +334,7 @@ export const db = {
     },
 
     findByNumber: async (certificateNumber: string): Promise<CertificateRecord | null> => {
-      if (usingSupabase("certificates")) {
+      if (!(await courseCatalogInMemory()) && usingSupabase("certificates")) {
         try {
           const { data, error } = await supabaseAdmin!.from("certificates")
             .select("*")
@@ -350,7 +351,7 @@ export const db = {
     },
 
     findByToken: async (verificationToken: string): Promise<CertificateRecord | null> => {
-      if (usingSupabase("certificates")) {
+      if (!(await courseCatalogInMemory()) && usingSupabase("certificates")) {
         try {
           const { data, error } = await supabaseAdmin!.from("certificates")
             .select("*")
@@ -375,7 +376,7 @@ export const db = {
       until?: string;
       dateField?: "created_at" | "issued_at";
     } = {}): Promise<CertificateRecord[]> => {
-      if (usingSupabase("certificates")) {
+      if (!(await courseCatalogInMemory()) && usingSupabase("certificates")) {
         try {
           let query = supabaseAdmin!.from("certificates").select("*");
           if (options.status) query = query.eq("status", options.status);
@@ -410,7 +411,7 @@ export const db = {
       dateField?: "created_at" | "issued_at";
       q?: string;
     } = {}): Promise<number> => {
-      if (usingSupabase("certificates")) {
+      if (!(await courseCatalogInMemory()) && usingSupabase("certificates")) {
         try {
           let query = supabaseAdmin!.from("certificates").select("*", { count: "exact", head: true });
           if (options.status) query = query.eq("status", options.status);
@@ -441,7 +442,7 @@ export const db = {
     bulkCreate: async (
       modules: Omit<CertificateModuleRecord, "id">[]
     ): Promise<CertificateModuleRecord[]> => {
-      if (usingSupabase("certificateModules")) {
+      if (!(await courseCatalogInMemory()) && usingSupabase("certificateModules")) {
         try {
           const { data, error } = await supabaseAdmin!.from("certificate_modules")
             .insert(modules)
@@ -457,7 +458,7 @@ export const db = {
     },
 
     findByCertificateId: async (certificateId: string): Promise<CertificateModuleRecord[]> => {
-      if (usingSupabase("certificateModules")) {
+      if (!(await courseCatalogInMemory()) && usingSupabase("certificateModules")) {
         try {
           const { data, error } = await supabaseAdmin!.from("certificate_modules")
             .select("*")
@@ -478,7 +479,7 @@ export const db = {
     create: async (
       event: Omit<CertificateEvent, "id" | "created_at">
     ): Promise<CertificateEvent> => {
-      if (usingSupabase("certificateEvents")) {
+      if (!(await courseCatalogInMemory()) && usingSupabase("certificateEvents")) {
         try {
           const { data, error } = await supabaseAdmin!.from("certificate_events")
             .insert(event)
@@ -495,7 +496,7 @@ export const db = {
     },
 
     findByCertificateId: async (certificateId: string): Promise<CertificateEvent[]> => {
-      if (usingSupabase("certificateEvents")) {
+      if (!(await courseCatalogInMemory()) && usingSupabase("certificateEvents")) {
         try {
           const { data, error } = await supabaseAdmin!.from("certificate_events")
             .select("*")
@@ -512,7 +513,7 @@ export const db = {
     },
 
     list: async (options: { limit?: number; since?: string } = {}): Promise<CertificateEvent[]> => {
-      if (usingSupabase("certificateEvents")) {
+      if (!(await courseCatalogInMemory()) && usingSupabase("certificateEvents")) {
         try {
           let query = supabaseAdmin!.from("certificate_events")
             .select("*")
@@ -776,7 +777,7 @@ export const db = {
 
   numbering: {
     nextNumber: async (prefix: string, year: number): Promise<number> => {
-      if (usingSupabase("numbering")) {
+      if (!(await courseCatalogInMemory()) && usingSupabase("numbering")) {
         // Fail CLOSED, not open. Number uniqueness is a correctness property
         // with legal/compliance weight — a duplicate surfaced months later
         // during an audit is far worse than a visible, retryable error now.

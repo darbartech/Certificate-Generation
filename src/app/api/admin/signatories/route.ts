@@ -27,11 +27,21 @@ export const POST = withAdminAuth("manageTemplates", async (req: NextRequest) =>
       );
     }
 
+    if (parsed.data.isDefaultSecondary) {
+      const allSignatories = await db.signatories.list(false);
+      for (const s of allSignatories) {
+        if (s.is_default_secondary) {
+          await db.signatories.update(s.id, { is_default_secondary: false });
+        }
+      }
+    }
+
     const signatory = await db.signatories.create({
       name: parsed.data.name,
       position: parsed.data.position,
       signature_storage_key: parsed.data.signatureImage || null,
       active: parsed.data.active !== false,
+      is_default_secondary: parsed.data.isDefaultSecondary === true,
     });
 
     return jsonResponse({ success: true, signatory }, 201);

@@ -5,6 +5,7 @@ import Link from "next/link";
 import apiClient from "@/lib/api/client";
 import type { PublicVerificationResponse } from "@/lib/types";
 import { formatDateForDisplay } from "@/lib/renderer/dateFormatter";
+import { Logo, Icon } from "@/components/ui";
 
 export default function VerifyTokenPage({ params }: { params: { token: string } }) {
   const [loading, setLoading] = useState(true);
@@ -31,12 +32,14 @@ export default function VerifyTokenPage({ params }: { params: { token: string } 
   const renderStatusBadge = (status: string) => {
     switch (status) {
       case "VALID":
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-sm font-semibold">
-          <span className="w-2 h-2 rounded-full bg-emerald-500"></span> VALID CERTIFICATE
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-gold/20 text-brand-gold text-sm font-bold tracking-wide">
+          <span className="flex items-center justify-center w-4 h-4 rounded-full bg-brand-gold text-white">
+            <Icon name="check" size={11} />
+          </span> VALID CERTIFICATE
         </span>;
       case "REVOKED":
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-800 text-sm font-semibold">
-          <span className="w-2 h-2 rounded-full bg-red-500"></span> CERTIFICATE REVOKED
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-900 text-sm font-bold tracking-wide">
+          <span className="w-2 h-2 rounded-full bg-red-600"></span> CERTIFICATE REVOKED
         </span>;
       case "NOT_FOUND":
       default:
@@ -47,24 +50,29 @@ export default function VerifyTokenPage({ params }: { params: { token: string } 
   };
 
   return (
-    <main className="min-h-screen flex flex-col">
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-md border-2 border-brand-navy flex items-center justify-center bg-gray-50">
-              <span className="text-brand-navy font-bold text-sm">D</span>
-            </div>
-            <div>
-              <p className="font-bold text-brand-navy text-sm">DarbarTech</p>
-              <p className="text-xs text-gray-400">Certificate Verification</p>
-            </div>
+    <main className="min-h-screen flex flex-col bg-gradient-to-b from-surface-muted to-white">
+      <header className="bg-white/95 backdrop-blur border-b border-gray-200 sticky top-0 z-40">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5">
+            <Logo size={36} />
+            <span className="flex flex-col leading-none">
+              <span className="text-[13px] font-bold tracking-tight">
+                <span className="text-brand-navy">Darbar</span>
+                <span className="text-brand-blue">Tech</span>
+              </span>
+              <span className="mt-1 text-[8.5px] font-medium uppercase tracking-[0.2em] text-gray-400">
+                Certificate Verification
+              </span>
+            </span>
           </Link>
           <div className="flex items-center gap-4">
-            <Link href="/verify" className="text-sm text-gray-600 hover:text-brand-navy transition-colors">
+            <Link href="/verify" className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-brand-navy transition-colors">
+              <Icon name="search" size={15} />
               Verify by Number
             </Link>
-            <Link href="/admin" className="text-sm text-brand-navy font-medium hover:underline">
-              Admin →
+            <Link href="/admin" className="inline-flex items-center gap-1.5 text-sm text-brand-navy font-medium hover:underline">
+              Admin
+              <Icon name="chevron-right" size={14} />
             </Link>
           </div>
         </div>
@@ -73,11 +81,12 @@ export default function VerifyTokenPage({ params }: { params: { token: string } 
       <section className="flex-1 py-12 px-4">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-brand-navy mb-3">
-              Certificate Verification Portal
+            <p className="eyebrow-rules mx-auto mb-3 justify-center">Official · DarbarTech Group of Technology</p>
+            <h1 className="font-display text-3xl sm:text-4xl font-bold text-brand-navy mb-3">
+              Certificate Verification
             </h1>
             <p className="text-gray-500 text-sm">
-              Official verification from DarbarTech Group of Technology
+              Public authenticity check — official from DarbarTech Group of Technology
             </p>
           </div>
 
@@ -116,12 +125,12 @@ export default function VerifyTokenPage({ params }: { params: { token: string } 
                 </div>
               ) : result.certificate ? (
                 <>
-                  <div className={`px-8 py-5 ${result.status === "REVOKED" ? "bg-red-600" : "bg-emerald-600"}`}>
+                  <div className={`px-8 py-5 ${result.status === "REVOKED" ? "bg-gradient-to-r from-red-700 to-red-600" : "bg-gradient-to-r from-brand-navy to-brand-blue"}`}>
                     <div className="max-w-2xl mx-auto flex items-center justify-between">
                       {renderStatusBadge(result.status)}
                       {result.status === "VALID" && (
-                        <div className="text-emerald-50 text-right hidden sm:block">
-                          <p className="text-xs opacity-75 uppercase tracking-wide">Verified On</p>
+                        <div className="text-white text-right hidden sm:block">
+                          <p className="text-xs opacity-70 uppercase tracking-wide">Verified On</p>
                           <p className="font-mono text-sm">{formatDateForDisplay(new Date(), "MMM dd, yyyy HH:mm")}</p>
                         </div>
                       )}
@@ -143,20 +152,16 @@ export default function VerifyTokenPage({ params }: { params: { token: string } 
                       )}
 
                       <div className="flex items-start gap-4 mb-8 pb-6 border-b border-gray-100">
-                        <div className={`w-14 h-14 shrink-0 rounded-xl flex items-center justify-center ${result.status === "REVOKED" ? "bg-red-50 border-2 border-red-200" : "bg-emerald-50 border-2 border-emerald-200"}`}>
+                        <div className={`w-14 h-14 shrink-0 rounded-xl flex items-center justify-center ${result.status === "REVOKED" ? "bg-red-50 border-2 border-red-200" : "bg-brand-gold/10 border-2 border-brand-gold/40"}`}>
                           {result.status === "VALID" ? (
-                            <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
+                            <Icon name="check" size={26} className="text-brand-gold" />
                           ) : (
-                            <svg className="w-7 h-7 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
+                            <Icon name="remove" size={26} className="text-red-600" />
                           )}
                         </div>
                         <div className="flex-1">
-                          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-                            {result.status === "VALID" ? "Certificate Verified Successfully" : "Certificate Has Been Revoked"}
+                          <h2 className="font-display text-2xl sm:text-3xl font-bold text-gray-900">
+                            {result.status === "VALID" ? "Certificate Verified" : "Certificate Has Been Revoked"}
                           </h2>
                           <p className="text-sm text-gray-500 mt-1.5">
                             {result.status === "VALID"
@@ -173,7 +178,7 @@ export default function VerifyTokenPage({ params }: { params: { token: string } 
                         </div>
                         <div>
                           <dt className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">Grade / Result</dt>
-                          <dd className="font-bold text-xl" style={{ color: "#1669B2" }}>{result.certificate.grade || "—"}</dd>
+                          <dd className="font-display font-bold text-xl text-brand-gold">{result.certificate.grade || "—"}</dd>
                         </div>
                         <div className="sm:col-span-2 pt-2">
                           <dt className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">Recipient</dt>
@@ -214,20 +219,19 @@ export default function VerifyTokenPage({ params }: { params: { token: string } 
                           </h3>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {result.certificate.modules.map((m: any) => (
-                              <div key={m.order} className="border border-gray-200 rounded-lg p-4 bg-gray-50/60">
+                              <div key={m.order} className="border border-gray-200 rounded-lg p-4 bg-surface-muted/60">
                                 <div className="flex items-center gap-3 mb-1">
                                   <span
-                                    className="inline-flex items-center justify-center w-7 h-7 rounded-md text-xs font-extrabold text-white"
-                                    style={{ backgroundColor: "#1669B2" }}
+                                    className="inline-flex items-center justify-center w-7 h-7 rounded-md text-xs font-extrabold text-white bg-brand-navy"
                                   >
                                     {String(m.order).padStart(2, "0")}
                                   </span>
-                                  <h4 className="font-semibold text-sm text-[#061A50] uppercase tracking-wide">
+                                  <h4 className="font-display font-bold text-sm text-brand-navy uppercase tracking-wide">
                                     {m.title}
                                   </h4>
                                 </div>
                                 {m.subtitle && (
-                                  <p className="text-xs mt-1 ml-10 text-[#1669B2] font-medium leading-relaxed">
+                                  <p className="text-xs mt-1 ml-10 text-brand-blue font-medium leading-relaxed">
                                     {m.subtitle}
                                   </p>
                                 )}

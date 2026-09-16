@@ -5,6 +5,7 @@ import Link from "next/link";
 import apiClient from "@/lib/api/client";
 import type { PublicVerificationResponse } from "@/lib/types";
 import { formatDateForDisplay } from "@/lib/renderer/dateFormatter";
+import { Logo, Icon } from "@/components/ui";
 
 type SearchState = "idle" | "loading" | "result";
 
@@ -33,12 +34,14 @@ export default function VerifyManualPage() {
   const renderStatusBadge = (status: string) => {
     switch (status) {
       case "VALID":
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-sm font-semibold">
-          <span className="w-2 h-2 rounded-full bg-emerald-500"></span> VALID CERTIFICATE
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-gold/20 text-brand-gold text-sm font-bold tracking-wide">
+          <span className="flex items-center justify-center w-4 h-4 rounded-full bg-brand-gold text-white">
+            <Icon name="check" size={11} />
+          </span> VALID CERTIFICATE
         </span>;
       case "REVOKED":
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-800 text-sm font-semibold">
-          <span className="w-2 h-2 rounded-full bg-red-500"></span> CERTIFICATE REVOKED
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-900 text-sm font-bold tracking-wide">
+          <span className="w-2 h-2 rounded-full bg-red-600"></span> CERTIFICATE REVOKED
         </span>;
       case "NOT_FOUND":
       default:
@@ -49,20 +52,24 @@ export default function VerifyManualPage() {
   };
 
   return (
-    <main className="min-h-screen flex flex-col">
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-md border-2 border-brand-navy flex items-center justify-center bg-gray-50">
-              <span className="text-brand-navy font-bold text-sm">D</span>
-            </div>
-            <div>
-              <p className="font-bold text-brand-navy text-sm">DarbarTech</p>
-              <p className="text-xs text-gray-400">Certificate Verification</p>
-            </div>
+    <main className="min-h-screen flex flex-col bg-gradient-to-b from-surface-muted to-white">
+      <header className="bg-white/95 backdrop-blur border-b border-gray-200 sticky top-0 z-40">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5">
+            <Logo size={36} />
+            <span className="flex flex-col leading-none">
+              <span className="text-[13px] font-bold tracking-tight">
+                <span className="text-brand-navy">Darbar</span>
+                <span className="text-brand-blue">Tech</span>
+              </span>
+              <span className="mt-1 text-[8.5px] font-medium uppercase tracking-[0.2em] text-gray-400">
+                Certificate Verification
+              </span>
+            </span>
           </Link>
-          <Link href="/admin" className="text-sm text-gray-600 hover:text-brand-navy transition-colors">
-            Admin Panel →
+          <Link href="/admin" className="inline-flex items-center gap-1.5 text-sm text-brand-navy font-medium hover:underline">
+            Admin
+            <Icon name="chevron-right" size={14} />
           </Link>
         </div>
       </header>
@@ -70,7 +77,8 @@ export default function VerifyManualPage() {
       <section className="flex-1 py-12 px-4">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-10">
-            <h1 className="text-3xl sm:text-4xl font-bold text-brand-navy mb-4">
+            <p className="eyebrow-rules mx-auto mb-3 justify-center">Official · DarbarTech Group of Technology</p>
+            <h1 className="font-display text-3xl sm:text-4xl font-bold text-brand-navy mb-4">
               Certificate Verification
             </h1>
             <p className="text-gray-600 max-w-xl mx-auto">
@@ -79,21 +87,27 @@ export default function VerifyManualPage() {
             </p>
           </div>
 
-          <div className="card card-body mb-8">
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-card mb-8">
             <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="text"
-                className="input flex-1 sm:py-3"
-                placeholder="Enter certificate number (e.g. DT-CERT-2026-00125)"
-                value={certificateNumber}
-                onChange={(e) => setCertificateNumber(e.target.value)}
-                disabled={state === "loading"}
-                autoComplete="off"
-                pattern="^[A-Za-z0-9-]+$"
-              />
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  <Icon name="search" size={18} />
+                </span>
+                <input
+                  type="text"
+                  className="input pl-10 sm:py-3"
+                  placeholder="Enter certificate number (e.g. DT-CERT-2026-00125)"
+                  value={certificateNumber}
+                  onChange={(e) => setCertificateNumber(e.target.value)}
+                  disabled={state === "loading"}
+                  autoComplete="off"
+                  pattern="^[A-Za-z0-9-]+$"
+                  aria-label="Certificate number"
+                />
+              </div>
               <button
                 type="submit"
-                className="btn-primary sm:py-3 px-8"
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-brand-navy text-white px-8 sm:py-3 py-2.5 text-sm font-medium hover:bg-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={state === "loading" || !certificateNumber.trim()}
               >
                 {state === "loading" ? (
@@ -101,7 +115,10 @@ export default function VerifyManualPage() {
                     <span className="spinner"></span> Verifying...
                   </span>
                 ) : (
-                  "Verify"
+                  <>
+                    Verify
+                    <Icon name="chevron-right" size={15} />
+                  </>
                 )}
               </button>
             </form>
@@ -133,7 +150,7 @@ export default function VerifyManualPage() {
                 </div>
               ) : result.certificate ? (
                 <>
-                  <div className={`px-8 py-5 ${result.status === "REVOKED" ? "bg-red-600" : "bg-emerald-600"}`}>
+                  <div className={`px-8 py-5 ${result.status === "REVOKED" ? "bg-gradient-to-r from-red-700 to-red-600" : "bg-gradient-to-r from-brand-navy to-brand-blue"}`}>
                     <div className="max-w-2xl mx-auto">
                       {renderStatusBadge(result.status)}
                     </div>
@@ -153,13 +170,11 @@ export default function VerifyManualPage() {
                       )}
 
                       <div className="flex items-start gap-3 mb-8 pb-6 border-b border-gray-100">
-                        <div className="w-12 h-12 shrink-0 rounded-lg border-2 border-brand-navy flex items-center justify-center bg-brand-navy/5">
-                          <svg className="w-6 h-6 text-brand-navy" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                          </svg>
+<div className="w-12 h-12 shrink-0 rounded-lg bg-brand-navy/5 border-2 border-brand-navy/20 flex items-center justify-center">
+                          <Icon name="shield" size={22} className="text-brand-navy" />
                         </div>
                         <div>
-                          <h2 className="text-xl font-bold text-gray-900">Certificate Details</h2>
+                          <h2 className="font-display text-2xl font-bold text-gray-900">Certificate Details</h2>
                           <p className="text-sm text-gray-500 mt-1">Issued by DarbarTech Group of Technology</p>
                         </div>
                       </div>
@@ -171,7 +186,7 @@ export default function VerifyManualPage() {
                         </div>
                         <div>
                           <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Grade</dt>
-                          <dd className="font-semibold" style={{ color: "#c9a227" }}>{result.certificate.grade || "—"}</dd>
+                          <dd className="font-display font-bold text-lg text-brand-gold">{result.certificate.grade || "—"}</dd>
                         </div>
                         <div className="sm:col-span-2">
                           <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Recipient</dt>

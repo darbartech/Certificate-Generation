@@ -49,6 +49,7 @@ const signatorySchema = z.object({
   position: z.string().trim().min(1, "Signatory position is required"),
   signatureImage: z.string().optional(),
   active: z.boolean().optional(),
+  isDefaultSecondary: z.boolean().optional(),
 });
 
 const recipientSchema = z.object({
@@ -139,7 +140,29 @@ export const courseCreateSchema = z.object({
   code: z.string().trim().min(1, "Course code is required").max(32, "Code is too long"),
   title: z.string().trim().min(1, "Course title is required").max(200, "Title is too long"),
   duration: z.string().trim().min(1, "Duration is required").max(50, "Duration is too long"),
-  modules: z.array(moduleSchema).optional(),
+  modules: z
+    .array(moduleSchema)
+    .optional()
+    .superRefine((val, ctx) => {
+      if (val === undefined) return;
+      const activeModules = val.filter((m) => m.title.trim().length > 0);
+      const { minCount, maxCount } = DARBARTECH_CERTIFICATE_TEMPLATE_V2.moduleConstraints;
+      if (minCount === maxCount) {
+        if (activeModules.length !== minCount) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `This template requires exactly ${minCount} active modules — you have ${activeModules.length}`,
+          });
+        }
+      } else {
+        if (activeModules.length < minCount || activeModules.length > maxCount) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `This template requires between ${minCount} and ${maxCount} active modules — you have ${activeModules.length}`,
+          });
+        }
+      }
+    }),
 });
 
 export type CertificateCreateInput = z.infer<typeof certificateCreateSchema>;

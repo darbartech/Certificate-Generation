@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, FormEvent, useRef, useCallback } from "react";
+import { useState, useEffect, FormEvent, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import apiClient from "@/lib/api/client";
+import { PageHeader, Stepper, Icon } from "@/components/ui";
 import { getCurrentDateStr } from "@/lib/renderer/dateFormatter";
 import { collectModuleFitIssues, type ModuleFitIssue } from "@/lib/renderer/moduleFit";
-import { getTemplateById } from "@/lib/templates/darbartech-certificate-v2";
+import { getTemplateById, DARBARTECH_CERTIFICATE_TEMPLATE_V2 } from "@/lib/templates/darbartech-certificate-v2";
 import type {
   CertificateCreateInput,
   CertificateModule,
@@ -16,7 +17,49 @@ import type {
   CertificateRecord,
 } from "@/lib/types";
 
-const EXACT_MODULE_COUNT = 4;
+const EXACT_MODULE_COUNT = DARBARTECH_CERTIFICATE_TEMPLATE_V2.moduleConstraints.maxCount;
+
+const WIZARD_STEPS = [
+  { key: "recipient", label: "Recipient" },
+  { key: "course", label: "Course" },
+  { key: "modules", label: "Modules" },
+  { key: "results", label: "Results & Dates" },
+  { key: "signatories", label: "Signatories" },
+  { key: "preview", label: "Preview & Issue" },
+];
+
+const FUZZY_MATCH_MIN_LENGTH = 3;
+
+const normalizeForMatch = (s: string): string =>
+  s.trim().toLowerCase().replace(/\s+/g, " ");
+
+// Case-insensitive substring/similarity check used by the manual-entry
+// "looks like an existing course" notice. Returns the best scoring catalog
+// match (score = length of the shared normalized segment), or null.
+const findSimilarCourse = (
+  inputTitle: string,
+  courses: (CourseRecord & { modules: CourseModuleRecord[] })[]
+): { code: string; title: string } | null => {
+  const input = normalizeForMatch(inputTitle);
+  if (input.length < FUZZY_MATCH_MIN_LENGTH) return null;
+  let best: { code: string; title: string; score: number } | null = null;
+  for (const course of courses) {
+    const candidates = [course.certificateTitle, course.title].filter(
+      (c): c is string => typeof c === "string" && c.trim().length > 0
+    );
+    for (const candidate of candidates) {
+      const norm = normalizeForMatch(candidate);
+      if (!norm) continue;
+      let score = 0;
+      if (norm.includes(input)) score = input.length;
+      else if (input.includes(norm)) score = norm.length;
+      if (score > 0 && (!best || score > best.score)) {
+        best = { code: course.code, title: candidate, score };
+      }
+    }
+  }
+  return best;
+};
 
 type CreateStage = "form" | "preview" | "success";
 
@@ -49,13 +92,15 @@ export default function CreateCertificatePage() {
   const [previewPdf, setPreviewPdf] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewErrors, setPreviewErrors] = useState<string[]>([]);
-const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
+  const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
   const [issueLoading, setIssueLoading] = useState(false);
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [issuedCert, setIssuedCert] = useState<CertificateRecord | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [user, setUser] = useState<AdminUser | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("");
+  const [fuzzyDupDismissed, setFuzzyDupDismissed] = useState(false);
+  const [wizardStep, setWizardStep] = useState(0);
 
   const [formData, setFormData] = useState<CertificateCreateInput & {
     certificateTemplateId?: string;
@@ -70,7 +115,7 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
     completionDate: "",
     issueDate: getCurrentDateStr(),
     signatory: { name: "", position: "", id: "" },
-    secondarySignatory: { name: "Nirmala Shrestha", position: "Managing Director", id: "" },
+    secondarySignatory: { name: "", position: "", id: "" },
     certificateTemplateId: "",
     certificateTemplateVersion: "",
     providerName: "",
@@ -78,6 +123,7 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
   });
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const loadCourses = useCallback(async () => {
     setLoadingCourses(true);
@@ -116,6 +162,26 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
   }, [loadCourses]);
 
   useEffect(() => {
+    if (loadingSignatories || signatories.length === 0) return;
+    const defaultSecondary = signatories.find((s) => s.is_default_secondary);
+    if (defaultSecondary) {
+      setFormData((prev) => {
+        if (prev.secondarySignatory?.name || prev.secondarySignatory?.position) {
+          return prev;
+        }
+        return {
+          ...prev,
+          secondarySignatory: {
+            id: defaultSecondary.id,
+            name: defaultSecondary.name,
+            position: defaultSecondary.position,
+          },
+        };
+      });
+    }
+  }, [signatories, loadingSignatories]);
+
+  useEffect(() => {
     return () => {
       if (previewPdf && previewPdf.startsWith("blob:")) {
         URL.revokeObjectURL(previewPdf);
@@ -125,6 +191,7 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
 
   const handleCourseSelect = useCallback((courseId: string) => {
     setSelectedCourseId(courseId);
+    setFuzzyDupDismissed(false);
 
     if (!courseId) {
       setFormData((prev) => ({
@@ -183,6 +250,11 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
     ? courses.find((c) => c.id === selectedCourseId) || null
     : null;
 
+  const fuzzyCourseMatch = useMemo(() => {
+    if (fuzzyDupDismissed || selectedCourseId) return null;
+    return findSimilarCourse(formData.program.title || "", courses);
+  }, [fuzzyDupDismissed, selectedCourseId, courses, formData.program.title]);
+
   const isTemplateCompatible = formData.modules.length === EXACT_MODULE_COUNT;
   const templateIssues: string[] = [];
   if (selectedCourse && !isTemplateCompatible) {
@@ -195,6 +267,62 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
       `Certificate template v2 requires exactly ${EXACT_MODULE_COUNT} modules. Current count: ${formData.modules.length}.`
     );
   }
+
+  const stepCompleted = (index: number): boolean => {
+    switch (index) {
+      case 0:
+        return !!formData.recipient.name.trim();
+      case 1:
+        return !!selectedCourse || !!formData.program.title.trim();
+      case 2:
+        return (
+          !!formData.program.title.trim() &&
+          !!formData.program.duration.trim() &&
+          formData.modules.length === EXACT_MODULE_COUNT &&
+          formData.modules.every((m: CertificateModule) => m.title.trim().length > 0)
+        );
+      case 3:
+        return !!formData.issueDate;
+      case 4:
+        return (
+          !!formData.signatory.name.trim() &&
+          !!formData.signatory.position.trim() &&
+          !!formData.secondarySignatory?.name?.trim() &&
+          !!formData.secondarySignatory?.position?.trim()
+        );
+      default:
+        return false;
+    }
+  };
+
+  const allPreviousComplete = (index: number): boolean => {
+    for (let i = 0; i < index; i++) {
+      if (!stepCompleted(i)) return false;
+    }
+    return true;
+  };
+
+  const activeStep = stage === "preview" ? 5 : wizardStep;
+
+  const canReachStep = (index: number): boolean => {
+    if (stage === "preview") return index <= 4;
+    if (index <= wizardStep) return true;
+    return allPreviousComplete(index);
+  };
+
+  const handleStepSelect = (index: number) => {
+    if (index === 5) {
+      formRef.current?.requestSubmit();
+      return;
+    }
+    if (stage === "preview") {
+      setStage("form");
+      setWizardStep(index);
+      return;
+    }
+    if (index < wizardStep) setWizardStep(index);
+    else if (index > wizardStep && allPreviousComplete(index)) setWizardStep(index);
+  };
 
   const handleSignatorySelect = (signatoryId: string) => {
     const sig = signatories.find((s) => s.id === signatoryId);
@@ -411,7 +539,7 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
           </div>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link href="/admin/certificates" className="btn-primary px-6 w-full sm:w-auto">
-              ← Back to Certificates
+              Back to Certificates
             </Link>
             <button
               onClick={() => apiClient.downloadCertificate(issuedCert.id)}
@@ -436,16 +564,30 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
   if (stage === "preview") {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Preview &amp; Issue</h1>
-            <p className="text-sm text-gray-500 mt-1">Review the certificate before final issuance</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => setStage("form")} className="btn-secondary">
-              ← Edit Form
+        <PageHeader
+          eyebrow="Certificates"
+          title="Preview & Issue"
+          description="Review the certificate before final issuance"
+          actions={
+            <button
+              onClick={() => {
+                setStage("form");
+                setWizardStep(4);
+              }}
+              className="btn-secondary"
+            >
+              Edit Form
             </button>
-          </div>
+          }
+        />
+        <div className="card card-body py-4 overflow-hidden">
+          <Stepper
+            steps={WIZARD_STEPS}
+            current={activeStep}
+            completed={stepCompleted}
+            onSelect={handleStepSelect}
+            disabled={canReachStep}
+          />
         </div>
 
         {previewErrors.length > 0 && (
@@ -467,7 +609,7 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
                 {previewLoading ? (
                   <span className="inline-flex items-center gap-2"><span className="spinner"></span>Regenerating...</span>
                 ) : (
-                  "🔄 Regenerate Preview"
+                  "Regenerate Preview"
                 )}
               </button>
             </div>
@@ -566,9 +708,9 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
                   {issueLoading ? (
                     <span className="inline-flex items-center gap-2"><span className="spinner"></span>Issuing...</span>
                   ) : !isTemplateCompatible ? (
-                    `⚠ Module count must be exactly ${EXACT_MODULE_COUNT}`
+                    `Module count must be exactly ${EXACT_MODULE_COUNT}`
                   ) : (
-                    "✓ Approve & Issue Certificate"
+                    "Approve & Issue Certificate"
                   )}
                 </button>
                 <button onClick={generatePreview} className="btn-secondary w-full" disabled={previewLoading}>
@@ -583,12 +725,20 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
   }
 
   return (
-    <form onSubmit={goToPreview} className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Create Certificate</h1>
-          <p className="text-sm text-gray-500 mt-1">Enter recipient, program, and signatory details</p>
-        </div>
+    <form ref={formRef} onSubmit={goToPreview} className="space-y-6">
+      <PageHeader
+        eyebrow="Certificates"
+        title="Create Certificate"
+        description="Enter recipient, program, results, and signatory details to issue a new certificate."
+      />
+      <div className="card card-body py-4 overflow-hidden">
+        <Stepper
+          steps={WIZARD_STEPS}
+          current={activeStep}
+          completed={stepCompleted}
+          onSelect={handleStepSelect}
+          disabled={canReachStep}
+        />
       </div>
 
       {formErrors.length > 0 && (
@@ -602,6 +752,7 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          {wizardStep === 0 && (
           <div className="card card-body space-y-5">
             <h2 className="font-semibold text-gray-900 border-b pb-3">Recipient Information</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -631,7 +782,9 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
               </div>
             </div>
           </div>
+          )}
 
+          {wizardStep === 1 && (
           <div className="card card-body space-y-5">
             <h2 className="font-semibold text-gray-900 border-b pb-3">Course Selection</h2>
             <p className="text-xs text-gray-500 -mt-3">
@@ -697,7 +850,7 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
                   <div className="border border-emerald-200 bg-emerald-50 rounded-lg p-4">
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                        ✓ Course data loaded
+                        Course data loaded
                       </p>
                       <button
                         type="button"
@@ -773,7 +926,6 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
                   isTemplateCompatible ? (
                     <div className="border border-emerald-300 bg-emerald-50 rounded-lg p-3">
                       <p className="text-sm font-semibold text-emerald-800 flex items-center gap-1.5">
-                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-500 text-white text-[10px]">✓</span>
                         Template compatible
                       </p>
                       <p className="text-xs text-emerald-700 mt-0.5">
@@ -784,7 +936,6 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
                   ) : (
                     <div className="border-2 border-amber-400 bg-amber-50 rounded-lg p-3">
                       <p className="text-sm font-semibold text-amber-900 flex items-center gap-1.5">
-                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-[11px]">!</span>
                         Template incompatibility — Issue blocked
                       </p>
                       <p className="text-xs text-amber-800 mt-1.5 font-medium">
@@ -812,7 +963,7 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
                         </li>
                       </ul>
                       <p className="mt-2 text-[11px] text-amber-600 font-semibold uppercase tracking-wide">
-                        ⛔ Issue flow will reject this configuration server-side.
+                        Issue flow will reject this configuration server-side.
                       </p>
                     </div>
                   )
@@ -820,7 +971,9 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
               </div>
             )}
           </div>
+          )}
 
+          {wizardStep === 2 && (
           <div className="card card-body space-y-5">
             <div className="flex items-start justify-between border-b pb-3 gap-4">
               <div>
@@ -861,6 +1014,25 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
                   disabled={!!selectedCourse}
                   readOnly={!!selectedCourse}
                 />
+                {fuzzyCourseMatch && (
+                  <div className="mt-2 flex items-start justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                    <p className="text-xs text-amber-800">
+                      This looks similar to course catalog entry{" "}
+                      <span className="font-medium">
+                        {fuzzyCourseMatch.code} — {fuzzyCourseMatch.title}
+                      </span>
+                      . Consider selecting it instead.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setFuzzyDupDismissed(true)}
+                      className="text-xs font-medium text-amber-700 hover:text-amber-900 shrink-0 underline underline-offset-2"
+                      aria-label="Dismiss suggestion"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="label flex items-center gap-2">
@@ -1002,7 +1174,9 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
               </div>
             </div>
           </div>
+          )}
 
+          {wizardStep === 3 && (
           <div className="card card-body space-y-5">
             <h2 className="font-semibold text-gray-900 border-b pb-3">Results &amp; Dates</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1040,7 +1214,10 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
               </div>
             </div>
           </div>
+          )}
 
+          {wizardStep === 4 && (
+          <>
           <div className="card card-body space-y-5">
             <div className="flex items-center justify-between border-b pb-3">
               <h2 className="font-semibold text-gray-900">Authorized Signatory</h2>
@@ -1081,8 +1258,12 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
             <div className="flex items-center justify-between border-b pb-3">
               <h2 className="font-semibold text-gray-900">Secondary Signatory (Managing Director)</h2>
               {!loadingSignatories && signatories.length > 0 && (
-                <select className="input w-auto py-1 text-xs" onChange={(e) => handleSecondarySignatorySelect(e.target.value)} defaultValue="">
-                  <option value="">Select signatory...</option>
+                <select
+                  className="input w-auto py-1 text-xs"
+                  value={formData.secondarySignatory?.id || ""}
+                  onChange={(e) => handleSecondarySignatorySelect(e.target.value)}
+                >
+                  <option value="">Select secondary signatory...</option>
                   {signatories.map((s) => (
                     <option key={s.id} value={s.id}>{s.name} — {s.position}</option>
                   ))}
@@ -1116,6 +1297,39 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
               </div>
             </div>
           </div>
+          </>
+          )}
+
+          <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={() => setWizardStep((s) => Math.max(0, s - 1))}
+              disabled={wizardStep === 0}
+              className="btn-secondary disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <Icon name="chevron-left" size={16} /> Back
+              </span>
+            </button>
+            {wizardStep < 4 ? (
+              <button
+                type="button"
+                onClick={() => setWizardStep((s) => s + 1)}
+                disabled={!stepCompleted(wizardStep)}
+                className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  Continue <Icon name="chevron-right" size={16} />
+                </span>
+              </button>
+            ) : (
+              <button type="submit" className="btn-primary">
+                <span className="inline-flex items-center gap-1.5">
+                  Review &amp; Generate Preview <Icon name="chevron-right" size={16} />
+                </span>
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="space-y-6">
@@ -1126,7 +1340,7 @@ const [moduleFitIssues, setModuleFitIssues] = useState<ModuleFitIssue[]>([]);
             </p>
             <div className="flex flex-col gap-2">
               <button type="submit" className="btn-primary w-full">
-                📄 Generate Preview
+                Generate Preview
               </button>
               <Link href="/admin/certificates" className="btn-secondary w-full text-center">
                 Cancel

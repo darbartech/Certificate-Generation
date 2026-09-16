@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import apiClient from "@/lib/api/client";
+import { Button, Icon, PageHeader, StatTile, Card, CardHeader, Badge, type BadgeTone, Spinner, Alert } from "@/components/ui";
 
 type DashboardSummary = {
   issuedLast30d: number;
@@ -29,13 +30,13 @@ type ActivityItem = {
   description: string;
 };
 
-const eventBadge: Record<string, string> = {
-  ISSUED: "badge-issued",
-  REISSUED: "badge-reissued",
-  REVOKED: "badge-revoked",
-  VERIFIED: "badge-preview",
-  DOWNLOADED: "badge-draft",
-  CREATED: "badge-draft",
+const eventTone: Record<string, BadgeTone> = {
+  ISSUED: "issued",
+  REISSUED: "amber",
+  REVOKED: "red",
+  VERIFIED: "cyan",
+  DOWNLOADED: "slate",
+  CREATED: "slate",
 };
 
 const timeAgo = (iso: string): string => {
@@ -49,6 +50,100 @@ const timeAgo = (iso: string): string => {
   if (days < 30) return `${days}d ago`;
   return new Date(iso).toLocaleDateString();
 };
+
+function IssuanceChart({ trend }: { trend: TrendPoint[] }) {
+  if (trend.length === 0) {
+    return (
+      <div className="py-12 text-center text-sm text-gray-400">No issuance data yet.</div>
+    );
+  }
+
+  const W = 560;
+  const H = 190;
+  const padL = 26;
+  const padR = 8;
+  const padT = 10;
+  const padB = 24;
+  const max = Math.max(...trend.map((p) => p.count));
+  const niceMax = Math.max(4, Math.ceil(max / 2) * 2);
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const n = trend.length;
+  const slot = innerW / n;
+  const barW = Math.min(26, slot * 0.56);
+
+  const yTick = (v: number) => padT + innerH - (v / niceMax) * innerH;
+  const gridVals = [0, niceMax / 2, niceMax];
+
+  const tip = (point: TrendPoint) => {
+    const d = new Date(point.weekStart + "T00:00:00");
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + `: ${point.count} issued`;
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        role="img"
+        aria-label="Certificate issuance trend — bar chart of the last 12 weeks"
+        className="w-full min-w-[420px]"
+      >
+        {gridVals.map((v) => (
+          <g key={v}>
+            <line
+              x1={padL}
+              y1={yTick(v)}
+              x2={W - padR}
+              y2={yTick(v)}
+              stroke="#e3e8f0"
+              strokeWidth={1}
+            />
+            <text
+              x={padL - 6}
+              y={yTick(v) + 3.5}
+              fontSize={9}
+              fill="#8b93ab"
+              textAnchor="end"
+            >
+              {v}
+            </text>
+          </g>
+        ))}
+        {trend.map((point, i) => {
+          const x = padL + i * slot + (slot - barW) / 2;
+          const y = yTick(point.count);
+          const h = padT + innerH - y;
+          const isLast = i === n - 1;
+          return (
+            <g key={point.weekStart}>
+              <rect
+                x={x}
+                y={y}
+                width={barW}
+                height={Math.max(2, h)}
+                rx={3}
+                fill={isLast ? "#3e92cc" : "#0a2463"}
+                opacity={isLast ? 1 : 0.82}
+              >
+                <title>{tip(point)}</title>
+              </rect>
+              <text
+                x={padL + i * slot + slot / 2}
+                y={H - 8}
+                fontSize={8.5}
+                fill="#8b93ab"
+                textAnchor="middle"
+              >
+                {new Date(point.weekStart + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <p className="mt-1 text-[11px] text-gray-400">Latest week highlighted in cyan</p>
+    </div>
+  );
+}
 
 export default function AdminDashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -86,14 +181,6 @@ export default function AdminDashboardPage() {
     void load();
   }, [load]);
 
-  const trendLabel = (point: TrendPoint) => {
-    const d = new Date(point.weekStart + "T00:00:00");
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  };
-
-  const trendMax = Math.max(1, ...trend.map((p) => p.count));
-  const maxCourseCount = Math.max(1, ...byCourse.map((c) => c.count));
-
   const trendPct = summary
     ? summary.issuedPrev30d > 0
       ? Math.round(((summary.issuedLast30d - summary.issuedPrev30d) / summary.issuedPrev30d) * 100)
@@ -101,167 +188,175 @@ export default function AdminDashboardPage() {
         ? 100
         : 0
     : 0;
-  const trendDelta = summary ? (summary.issuedLast30d >= summary.issuedPrev30d ? "up" : "down") : "flat";
+  const trendUp = summary ? summary.issuedLast30d >= summary.issuedPrev30d : true;
+  const maxCourseCount = Math.max(1, ...byCourse.map((c) => c.count));
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Operational overview of certificate issuance and verification
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button type="button" onClick={() => void load()} className="btn-secondary text-sm" disabled={loading}>
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
-          <Link href="/admin/certificates/new" className="btn-primary">
-            <span className="mr-2">+</span> New Certificate
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Operations"
+        title="Dashboard"
+        description="Operational overview of certificate issuance and verification"
+        actions={
+          <>
+            <Button variant="secondary" iconLeft="refresh" onClick={() => void load()} disabled={loading}>
+              {loading ? "Refreshing..." : "Refresh"}
+            </Button>
+            <Link href="/admin/certificates/new">
+              <Button iconLeft="plus">New Certificate</Button>
+            </Link>
+          </>
+        }
+      />
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-sm font-medium text-red-800">{error}</p>
-        </div>
+        <Alert variant="error" title="Failed to load">
+          {error}
+        </Alert>
       )}
 
       {loading && !summary ? (
-        <div className="card card-body py-20 text-center text-gray-500">
-          <span className="spinner w-6 h-6 border-brand-navy border-t-transparent"></span>
-          <p className="mt-3 text-sm">Loading dashboard...</p>
-        </div>
+        <Spinner key="spinner" label="Loading dashboard..." />
       ) : summary ? (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="card card-body">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Issued (30d)</p>
-              <div className="flex items-end gap-2 mt-1">
-                <p className="text-2xl font-bold text-gray-900">{summary.issuedLast30d}</p>
-                {summary.issuedPrev30d > 0 ? (
-                  <span
-                    className={`text-xs font-semibold mb-1 ${
-                      trendDelta === "up" ? "text-emerald-600" : "text-red-600"
-                    }`}
-                  >
-                    {trendDelta === "up" ? "▲" : "▼"}
-                    {Math.abs(trendPct)}%
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            <div className="card card-body">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Draft</p>
-              <p className="text-2xl font-bold text-gray-600 mt-1">{summary.draftCount}</p>
-            </div>
-            <div className="card card-body">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Revoked</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{summary.revokedCount}</p>
-            </div>
-            <div className="card card-body">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Verified (7d)</p>
-              <p className="text-2xl font-bold text-brand-navy mt-1">{summary.verifiedLast7d}</p>
-            </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
+            <StatTile
+              icon="certificate"
+              accent="navy"
+              label="Issued (30d)"
+              value={summary.issuedLast30d}
+              delta={trendPct}
+              deltaUp={trendUp}
+            />
+            <StatTile
+              icon="edit"
+              accent="amber"
+              label="Drafts"
+              value={summary.draftCount}
+              hint="Pending certificates"
+            />
+            <StatTile
+              icon="remove"
+              accent="red"
+              label="Revoked"
+              value={summary.revokedCount}
+              hint="All time"
+            />
+            <StatTile
+              icon="verify"
+              accent="cyan"
+              label="Verified (7d)"
+              value={summary.verifiedLast7d}
+              hint="Public verifications"
+            />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="card card-body">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-gray-900">Issuance trend (last 12 weeks)</h2>
+            <Card>
+              <CardHeader className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-900">Issuance trend</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Last 12 weeks</p>
+                </div>
+                <span className="text-xs text-gray-400">
+                  {summary.issuedLast30d} in last 30 days
+                </span>
+              </CardHeader>
+              <div className="card-body">
+                <IssuanceChart trend={trend} />
               </div>
-              {trend.length === 0 ? (
-                <p className="text-sm text-gray-400 py-8 text-center">No issuance data yet.</p>
-              ) : (
-                <div className="flex items-end gap-1 h-40">
-                  {trend.map((point, i) => (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-                      <span className="text-[10px] text-gray-500">{point.count}</span>
-                      <div
-                        className="w-full max-w-[22px] rounded-t bg-brand-navy/80 hover:bg-brand-navy transition-colors"
-                        style={{ height: `${Math.max(4, Math.round((point.count / trendMax) * 120))}px` }}
-                        title={`${trendLabel(point)}: ${point.count} issued`}
-                      />
-                      <span className="text-[9px] text-gray-400 truncate w-full text-center" title={trendLabel(point)}>
-                        {trendLabel(point)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            </Card>
 
-            <div className="card card-body">
-              <h2 className="font-semibold text-gray-900 mb-4">By course (last 90d)</h2>
-              {byCourse.length === 0 ? (
-                <p className="text-sm text-gray-400 py-8 text-center">No certificates issued in this window.</p>
-              ) : (
-                <div className="space-y-3">
-                  {byCourse.map((row) => (
-                    <div key={row.courseId || "manual"} className="space-y-1">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-700 truncate">{row.courseTitle}</span>
-                        <span className="font-semibold text-gray-900">{row.count}</span>
-                      </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-brand-gold"
-                          style={{ width: `${Math.round((row.count / maxCourseCount) * 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+            <Card>
+              <CardHeader className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-900">By course</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Last 90 days, top 5</p>
                 </div>
-              )}
-            </div>
+              </CardHeader>
+              <div className="card-body">
+                {byCourse.length === 0 ? (
+                  <p className="text-sm text-gray-400 py-8 text-center">No certificates issued in this window.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {byCourse.map((row) => (
+                      <div key={row.courseId || "manual"} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-700 truncate pr-3">{row.courseTitle}</span>
+                          <span className="font-semibold text-gray-900 tabular-nums">{row.count}</span>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-brand-cyan"
+                            style={{ width: `${Math.round((row.count / maxCourseCount) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Card>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 card overflow-hidden">
-              <div className="card-header">
-                <h2 className="font-semibold text-gray-900">Recent activity</h2>
+            <Card className="lg:col-span-2 overflow-hidden">
+              <CardHeader className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-900">Recent activity</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Latest certificate events</p>
+                </div>
+              </CardHeader>
+              <div className="card-body">
+                {activity.length === 0 ? (
+                  <p className="py-12 text-center text-gray-400 text-sm">No recent activity.</p>
+                ) : (
+                  <ul className="divide-y divide-gray-100">
+                    {activity.map((item) => (
+                      <li key={item.id}>
+                        <Link
+                          href={`/admin/certificates/${item.certificateId}`}
+                          className="flex items-center gap-3 py-3 -mx-2 px-2 rounded-lg hover:bg-surface-muted transition-colors"
+                        >
+                          <span className="w-8 h-8 shrink-0 rounded-full bg-surface-subtle flex items-center justify-center">
+                            <Icon
+                              name={item.event_type === "REVOKED" ? "remove" : item.event_type === "VERIFIED" ? "shield" : "certificate"}
+                              size={15}
+                              className="text-brand-cyan"
+                            />
+                          </span>
+                          <span className="text-sm text-gray-700 flex-1 min-w-0 truncate">
+                            {item.description}
+                          </span>
+                          <Badge tone={eventTone[item.event_type] || "slate"}>{item.event_type}</Badge>
+                          <span className="text-xs text-gray-400 whitespace-nowrap">
+                            {item.actorLabel} · {timeAgo(item.created_at)}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              {activity.length === 0 ? (
-                <div className="py-12 text-center text-gray-400 text-sm">No recent activity.</div>
-              ) : (
-                <ul className="divide-y divide-gray-100">
-                  {activity.map((item) => (
-                    <li key={item.id}>
-                      <Link
-                        href={`/admin/certificates/${item.certificateId}`}
-                        className="flex items-center gap-3 px-6 py-3 hover:bg-gray-50 transition-colors"
-                      >
-                        <span className={`badge ${eventBadge[item.event_type] || "badge-draft"}`}>
-                          {item.event_type}
-                        </span>
-                        <span className="text-sm text-gray-700 flex-1 min-w-0 truncate">
-                          {item.description}
-                        </span>
-                        <span className="text-xs text-gray-400 whitespace-nowrap">
-                          {item.actorLabel} · {timeAgo(item.created_at)}
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            </Card>
 
-            <div className="card overflow-hidden">
-              <div className="card-header">
-                <h2 className="font-semibold text-gray-900">Attention needed</h2>
-              </div>
+            <Card accent={summary.attention.staleDrafts.length + summary.attention.invalidModuleCourses.length > 0 ? "red" : "navy"}>
+              <CardHeader>
+                <h2 className="text-sm font-semibold text-gray-900">Attention needed</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Items requiring review</p>
+              </CardHeader>
               <div className="card-body space-y-4">
                 {summary.attention.staleDrafts.length === 0 && summary.attention.invalidModuleCourses.length === 0 ? (
-                  <p className="text-sm text-emerald-600 flex items-center gap-1.5">
-                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-600 text-[10px]">✓</span>
-                    Nothing needs attention
-                  </p>
+                  <Alert variant="success" className="bg-emerald-50/60">
+                    <div className="flex items-center gap-2">
+                      <Icon name="check" size={15} className="text-emerald-600" />
+                      Nothing needs attention
+                    </div>
+                  </Alert>
                 ) : (
                   <>
                     {summary.attention.staleDrafts.length > 0 && (
-                      <div>
+                      <div className="border-l-[3px] border-amber-400 pl-3">
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                           {summary.attention.staleDrafts.length} stale draft{summary.attention.staleDrafts.length > 1 ? "s" : ""} (&gt;7 days)
                         </p>
@@ -278,7 +373,7 @@ export default function AdminDashboardPage() {
                       </div>
                     )}
                     {summary.attention.invalidModuleCourses.length > 0 && (
-                      <div>
+                      <div className="border-l-[3px] border-red-400 pl-3">
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                           {summary.attention.invalidModuleCourses.length} course{summary.attention.invalidModuleCourses.length > 1 ? "s" : ""} with module count that can&apos;t render
                         </p>
@@ -302,7 +397,7 @@ export default function AdminDashboardPage() {
                   </>
                 )}
               </div>
-            </div>
+            </Card>
           </div>
         </>
       ) : null}
