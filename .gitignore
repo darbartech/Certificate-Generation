@@ -17,3 +17,6 @@ coverage/
 # Certificate storage
 tmp-certificates/
 certificate-storage/
+
+# Large archive (exceeds GitHub 100 MB limit)
+*.zip
