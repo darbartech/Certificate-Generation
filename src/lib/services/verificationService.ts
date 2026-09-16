@@ -5,22 +5,28 @@ export const generateVerificationToken = (length = 32): string => {
 };
 
 export const getVerificationUrl = (token: string): string => {
-  const configured = process.env.NEXT_PUBLIC_VERIFY_URL || process.env.NEXT_PUBLIC_SITE_URL;
+  // Preferred: private VERIFY_URL (server-only, never exposed to the browser).
+  // NEXT_PUBLIC_* variants kept as fallbacks for setups that declared them
+  // before the private variable existed.
+  const configured =
+    process.env.VERIFY_URL ||
+    process.env.NEXT_PUBLIC_VERIFY_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL;
 
   if (!configured) {
     // This is what produced certificates with a "localhost/verify" QR code and caption:
-    // NEXT_PUBLIC_SITE_URL / NEXT_PUBLIC_VERIFY_URL were never set in the deployed .env,
+    // VERIFY_URL / NEXT_PUBLIC_SITE_URL / NEXT_PUBLIC_VERIFY_URL were never set in the deployed .env,
     // so every render silently fell back to the local dev URL with no indication anything
     // was wrong. Fail loudly in production instead of baking a dead link into a PDF that
     // may get printed, emailed, or handed to a student.
     if (process.env.NODE_ENV === "production") {
       throw new Error(
-        "NEXT_PUBLIC_VERIFY_URL (or NEXT_PUBLIC_SITE_URL) is not set. Refusing to generate a " +
+        "VERIFY_URL (or NEXT_PUBLIC_SITE_URL) is not set. Refusing to generate a " +
         "certificate with a localhost verification link in production. Set it in your .env."
       );
     }
     console.warn(
-      "[verificationService] NEXT_PUBLIC_VERIFY_URL / NEXT_PUBLIC_SITE_URL not set — " +
+      "[verificationService] VERIFY_URL / NEXT_PUBLIC_SITE_URL not set — " +
       "falling back to http://localhost:3000 for this non-production render."
     );
   }
