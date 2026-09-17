@@ -10,6 +10,8 @@ export default function AdminLoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [totp, setTotp] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,10 +36,13 @@ export default function AdminLoginPage() {
     setError(null);
 
     try {
-      const result = await apiClient.login(username.trim(), password);
+      const result = await apiClient.login(username.trim(), password, totp.trim() || undefined);
       if (result.success && result.user) {
         localStorage.setItem("dt_admin", JSON.stringify(result.user));
         router.replace("/admin/certificates");
+      } else if (result.mfaRequired) {
+        setMfaRequired(true);
+        setError(totp.trim() ? "Invalid or expired code. Try again." : null);
       } else {
         setError(result.error || (result.errors ? result.errors.join(", ") : "Login failed"));
       }
@@ -122,9 +127,43 @@ export default function AdminLoginPage() {
                 </div>
               </div>
 
+              {mfaRequired && (
+                <div>
+                  <label className="label" htmlFor="totp">
+                    Authentication code
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      <Icon name="shield" size={16} />
+                    </span>
+                    <input
+                      id="totp"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      className="input pl-9 tracking-widest"
+                      value={totp}
+                      onChange={(e) => setTotp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="6-digit code"
+                      disabled={loading}
+                      autoFocus
+                    />
+                  </div>
+                  <p className="mt-1.5 text-xs text-gray-500">
+                    Enter the code from your authenticator app.
+                  </p>
+                </div>
+              )}
+
               {error && <Alert variant="error" title={error} />}
 
-              <Button type="submit" block size="lg" loading={loading} disabled={!username || !password}>
+              <Button
+                type="submit"
+                block
+                size="lg"
+                loading={loading}
+                disabled={!username || !password || (mfaRequired && totp.length !== 6)}
+              >
                 {loading ? "Signing in..." : "Sign In"}
               </Button>
             </form>

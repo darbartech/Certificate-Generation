@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAdminAuth, jsonResponse, errorResponse } from "@/lib/middleware/auth";
+import { withAdminAuth, jsonResponse, errorResponse, serviceErrorResponse } from "@/lib/middleware/auth";
 import { db } from "@/lib/database";
 import { certificateCreateSchema } from "@/lib/validation/schemas";
 import {
@@ -8,7 +8,7 @@ import {
 } from "@/lib/services/certificateService";
 import type { AdminUser } from "@/lib/types";
 
-export const GET = withAdminAuth(async (req: NextRequest) => {
+export const GET = withAdminAuth("VIEW_CERTIFICATES", async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "50", 10) || 50, 1), 500);
@@ -31,7 +31,6 @@ export const GET = withAdminAuth(async (req: NextRequest) => {
       data: certificates.map((c) => ({
         id: c.id,
         certificate_number: c.certificate_number,
-        verification_token: c.verification_token,
         recipient_name: c.recipient_name,
         program_title: c.program_title,
         duration: c.duration,
@@ -52,11 +51,11 @@ export const GET = withAdminAuth(async (req: NextRequest) => {
     });
   } catch (err) {
     console.error("[GET /api/admin/certificates] failed:", err);
-    return errorResponse(err instanceof Error ? err.message : "Failed to list certificates", 500);
+    return serviceErrorResponse(err, "Failed to list certificates");
   }
 });
 
-export const POST = withAdminAuth("create", async (req: NextRequest, { user }) => {
+export const POST = withAdminAuth("CREATE_CERTIFICATE", async (req: NextRequest, { user, requestId, ip, userAgent }) => {
   try {
     const body = await req.json();
     const parsed = certificateCreateSchema.safeParse(body);
@@ -70,7 +69,11 @@ export const POST = withAdminAuth("create", async (req: NextRequest, { user }) =
       );
     }
 
-    const result = await createDraftCertificate(parsed.data, (user as AdminUser).id);
+    const result = await createDraftCertificate(parsed.data, (user as AdminUser).id, {
+      requestId,
+      ip,
+      userAgent,
+    });
     if (!result.success) {
       return NextResponse.json({ success: false, errors: result.errors }, { status: 400 });
     }
@@ -83,6 +86,6 @@ export const POST = withAdminAuth("create", async (req: NextRequest, { user }) =
     }, 201);
   } catch (err) {
     console.error("[POST /api/admin/certificates] failed:", err);
-    return errorResponse(err instanceof Error ? err.message : "Failed to create certificate", 500);
+    return serviceErrorResponse(err, "Failed to create certificate");
   }
 });

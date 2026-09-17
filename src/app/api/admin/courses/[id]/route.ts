@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { withAdminAuth, jsonResponse, errorResponse } from "@/lib/middleware/auth";
+import { withAdminAuth, jsonResponse, errorResponse, serviceErrorResponse } from "@/lib/middleware/auth";
 import { db, seedDatabase } from "@/lib/database";
 import { moduleSchema } from "@/lib/validation/schemas";
 import { DARBARTECH_CERTIFICATE_TEMPLATE_V2 } from "@/lib/templates/darbartech-certificate-v2";
@@ -41,11 +41,11 @@ export const GET = withAdminAuth(async (_req: NextRequest, { params }) => {
     const modules = await db.courseModules.findByCourseId(courseId, false);
     return jsonResponse({ success: true, course, modules });
   } catch (err) {
-    return errorResponse(err instanceof Error ? err.message : "Failed to fetch course", 500);
+    return serviceErrorResponse(err, "Failed to fetch course");
   }
 });
 
-export const PATCH = withAdminAuth("manageTemplates", async (req: NextRequest, { params }) => {
+export const PATCH = withAdminAuth("MANAGE_COURSES", async (req: NextRequest, { params }) => {
   try {
     await seedDatabase();
     const courseId = params?.id;
@@ -72,8 +72,10 @@ export const PATCH = withAdminAuth("manageTemplates", async (req: NextRequest, {
 
     const updated = await db.courses.update(courseId, fields);
 
-    // Full module replacement when a modules array is supplied. Delete-then-
-    // create gives the simplest correct behavior for the UI's module editor.
+    // Full module replacement when a modules array is supplied. The update is
+    // performed transactionally via the update_course_with_modules RPC (§18):
+    // course fields + module grid commit or roll back together, so a mid-way
+    // failure can never leave a course with new fields but an empty module set.
     if ("modules" in body) {
       const parsed = courseModulesPatchSchema.safeParse(body.modules);
       if (!parsed.success) {
@@ -87,21 +89,25 @@ export const PATCH = withAdminAuth("manageTemplates", async (req: NextRequest, {
           { status: 400 }
         );
       }
-      await db.courseModules.deleteByCourseId(courseId);
-      for (const mod of parsed.data) {
-        await db.courseModules.create({
-          course_id: courseId,
+      const result = await db.courses.updateWithModules(
+        courseId,
+        fields as Omit<Partial<import("@/lib/types").CourseRecord>, "id" | "created_at" | "updated_at">,
+        parsed.data.map((mod) => ({
           sort_order: mod.order,
           title: mod.title,
           subtitle: mod.subtitle || null,
           active: true,
-        });
+        }))
+      );
+      if (!result.course) {
+        return errorResponse("Course not found while saving modules", 404);
       }
+      return jsonResponse({ success: true, course: result.course, modules: result.modules });
     }
 
     const modules = await db.courseModules.findByCourseId(courseId, false);
     return jsonResponse({ success: true, course: updated || existing, modules });
   } catch (err) {
-    return errorResponse(err instanceof Error ? err.message : "Failed to update course", 500);
+    return serviceErrorResponse(err, "Failed to update course");
   }
 });

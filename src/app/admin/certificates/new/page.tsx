@@ -96,6 +96,7 @@ export default function CreateCertificatePage() {
   const [issueLoading, setIssueLoading] = useState(false);
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [issuedCert, setIssuedCert] = useState<CertificateRecord | null>(null);
+  const [verificationUrl, setVerificationUrl] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [user, setUser] = useState<AdminUser | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("");
@@ -485,6 +486,7 @@ export default function CreateCertificatePage() {
       const result = await apiClient.issueCertificate(draftId!, formData);
       if (result.success && result.certificate) {
         setIssuedCert(result.certificate as CertificateRecord);
+        setVerificationUrl(result.verificationUrl || null);
         setStage("success");
       } else {
         setPreviewErrors(result.errors || ["Issuance failed"]);
@@ -496,7 +498,7 @@ export default function CreateCertificatePage() {
     }
   };
 
-  const canIssue = user?.permissions.issue || user?.role === "super_admin";
+  const canIssue = user?.permissions.ISSUE_CERTIFICATE || user?.role === "super_admin";
 
   if (stage === "success" && issuedCert) {
     return (
@@ -548,7 +550,10 @@ export default function CreateCertificatePage() {
               Download PDF
             </button>
             <a
-              href={`/verify/${issuedCert.verification_token}`}
+              href={
+                verificationUrl ||
+                `/verify?number=${encodeURIComponent(issuedCert.certificate_number)}`
+              }
               target="_blank"
               rel="noopener noreferrer"
               className="btn-gold px-6 w-full sm:w-auto"

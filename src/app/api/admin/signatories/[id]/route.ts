@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAdminAuth, jsonResponse, errorResponse } from "@/lib/middleware/auth";
+import { withAdminAuth, jsonResponse, errorResponse, serviceErrorResponse } from "@/lib/middleware/auth";
 import { db, seedDatabase } from "@/lib/database";
 
 export const GET = withAdminAuth(async (_req: NextRequest, { params }) => {
@@ -15,11 +15,11 @@ export const GET = withAdminAuth(async (_req: NextRequest, { params }) => {
     }
     return jsonResponse({ success: true, signatory });
   } catch (err) {
-    return errorResponse(err instanceof Error ? err.message : "Failed to fetch signatory", 500);
+    return serviceErrorResponse(err, "Failed to fetch signatory");
   }
 });
 
-export const PATCH = withAdminAuth("manageTemplates", async (req: NextRequest, { params }) => {
+export const PATCH = withAdminAuth("MANAGE_SIGNATORIES", async (req: NextRequest, { params }) => {
   try {
     await seedDatabase();
     const signatoryId = params?.id;
@@ -72,6 +72,6 @@ export const PATCH = withAdminAuth("manageTemplates", async (req: NextRequest, {
 
     return jsonResponse({ success: true, signatory: updated });
   } catch (err) {
-    return errorResponse(err instanceof Error ? err.message : "Failed to update signatory", 500);
+    return serviceErrorResponse(err, "Failed to update signatory");
   }
 });

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAdminAuth, jsonResponse, errorResponse } from "@/lib/middleware/auth";
+import { withAdminAuth, jsonResponse, errorResponse, serviceErrorResponse } from "@/lib/middleware/auth";
 import { getCertificateWithModules } from "@/lib/services/certificateService";
 import { getAuditTrail } from "@/lib/services/auditService";
 
-export const GET = withAdminAuth(async (_req: NextRequest, { params }) => {
+export const GET = withAdminAuth("VIEW_CERTIFICATES", async (_req: NextRequest, { params }) => {
   try {
     const certificateId = params?.id;
     if (!certificateId) {
@@ -24,6 +24,6 @@ export const GET = withAdminAuth(async (_req: NextRequest, { params }) => {
       events,
     });
   } catch (err) {
-    return errorResponse(err instanceof Error ? err.message : "Failed to fetch certificate", 500);
+    return serviceErrorResponse(err, "Failed to fetch certificate");
   }
 });

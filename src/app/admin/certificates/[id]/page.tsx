@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import apiClient from "@/lib/api/client";
@@ -46,11 +46,14 @@ const formatStatusForEvent = (eventType: string): string => {
   const map: Record<string, string> = {
     CREATED: "Certificate Created",
     PREVIEW_GENERATED: "Preview Generated",
+    ISSUING: "Issuance Started",
     ISSUED: "Certificate Issued",
+    ISSUE_FAILED: "Issuance Failed",
     DOWNLOADED: "Certificate Downloaded",
     VERIFIED: "Certificate Verified",
     REVOKED: "Certificate Revoked",
     REISSUED: "Certificate Reissued",
+    SUPERSEDED: "Certificate Superseded",
   };
   return map[eventType] || eventType;
 };
@@ -61,9 +64,15 @@ const eventBadgeTone = (eventType: string): "slate" | "cyan" | "issued" | "red" 
       return "issued";
     case "REISSUED":
       return "amber";
+    case "SUPERSEDED":
+      return "amber";
     case "REVOKED":
       return "red";
+    case "ISSUE_FAILED":
+      return "red";
     case "VERIFIED":
+      return "cyan";
+    case "ISSUING":
       return "cyan";
     default:
       return "slate";
@@ -90,6 +99,8 @@ export default function CertificateDetailPage() {
   const [reissuing, setReissuing] = useState(false);
   const [reissueError, setReissueError] = useState<string | null>(null);
   const [reissuedCert, setReissuedCert] = useState<CertificateRecord | null>(null);
+  const reissueKeyRef = useRef<string | null>(null);
+  const reissueInFlightRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -127,8 +138,8 @@ export default function CertificateDetailPage() {
 
   const cert = data?.certificate;
   const isIssued = cert?.status === "ISSUED" || cert?.status === "REISSUED";
-  const canRevoke = (user?.permissions.revoke || user?.role === "super_admin") && isIssued;
-  const canReissue = (user?.permissions.issue || user?.role === "super_admin") && isIssued;
+  const canRevoke = (user?.permissions.REVOKE_CERTIFICATE || user?.role === "super_admin") && isIssued;
+  const canReissue = (user?.permissions.REISSUE_CERTIFICATE || user?.role === "super_admin") && isIssued;
 
   const handleRevoke = async () => {
     if (!cert) return;
@@ -151,27 +162,42 @@ export default function CertificateDetailPage() {
   };
 
   const handleReissue = async () => {
-    if (!cert) return;
+    if (!cert || reissueInFlightRef.current) return;
+    reissueInFlightRef.current = true;
     setReissuing(true);
     setReissueError(null);
+    // V2 §14: one idempotency key per logical operation. Kept across network
+    // retries so a retried request replays instead of minting a second cert.
+    if (!reissueKeyRef.current) {
+      reissueKeyRef.current =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
     try {
       const res = await apiClient.reissueCertificate(
         cert.id,
         reissueReason.trim(),
         undefined,
-        refreshCourseData
+        refreshCourseData,
+        reissueKeyRef.current
       );
       if (res.success && res.certificate) {
         const newCert = res.certificate as CertificateRecord;
+        reissueKeyRef.current = null;
         setReissuedCert(newCert);
         setShowReissue(false);
         await load();
       } else {
+        // Definitive application-level outcome — allow a fresh attempt.
+        reissueKeyRef.current = null;
         setReissueError(res.errors?.join(", ") || res.error || "Reissue failed");
       }
     } catch (err) {
+      // Network/timeout — retain the key so a retry is replay-safe.
       setReissueError(err instanceof Error ? err.message : "Reissue failed");
     } finally {
+      reissueInFlightRef.current = false;
       setReissuing(false);
     }
   };
@@ -240,7 +266,7 @@ export default function CertificateDetailPage() {
               </Button>
             )}
             {canReissue && (
-              <Button variant="secondary" iconLeft="refresh" onClick={() => setShowReissue(true)}>
+              <Button variant="secondary" iconLeft="refresh" onClick={() => { reissueKeyRef.current = null; setShowReissue(true); }}>
                 Reissue
               </Button>
             )}
@@ -330,15 +356,15 @@ export default function CertificateDetailPage() {
               </ol>
             </div>
 
-            {isIssued && cert.verification_token && (
+            {isIssued && (
               <div className="mt-6 pt-4 border-t border-gray-100">
                 <p className="text-gray-500 text-xs uppercase tracking-wide mb-1.5">Verification link</p>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 truncate text-xs bg-surface-muted border border-gray-200 rounded px-2 py-1.5">
-                    {verificationBase}/verify/{cert.verification_token}
+                    {verificationBase}/verify?number={encodeURIComponent(cert.certificate_number)}
                   </code>
                   <a
-                    href={`/verify/${cert.verification_token}`}
+                    href={`/verify?number=${encodeURIComponent(cert.certificate_number)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 btn-gold px-3 py-1.5 text-xs"
@@ -347,6 +373,10 @@ export default function CertificateDetailPage() {
                     <Icon name="external" size={13} />
                   </a>
                 </div>
+                <p className="text-[11px] text-gray-400 mt-1.5">
+                  Public verification uses the certificate number. The QR code printed on the
+                  certificate carries a one-way verification token that is never stored in raw form.
+                </p>
               </div>
             )}
           </CardBody>
@@ -438,7 +468,7 @@ export default function CertificateDetailPage() {
 
       <Modal
         open={showReissue}
-        onClose={() => { setShowReissue(false); setReissueError(null); }}
+        onClose={() => { setShowReissue(false); setReissueError(null); reissueKeyRef.current = null; }}
         title={`Reissue ${cert.certificate_number}`}
         subtitle="A new certificate number will be generated from this record."
         closeDisabled={reissuing}

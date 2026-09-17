@@ -1,12 +1,21 @@
+// V2 §28: Fundamental status model. REISSUED is kept as a legacy alias
+// for existing DB rows only — new reissued certificates carry status ISSUED
+// with reissued_from_id populated (the original becomes SUPERSEDED with
+// superseded_by_id populated). Use `isIssuedLike` / the `ISSUED || REISSUED`
+// pattern for guards so legacy and new records are both accepted.
 export type CertificateStatus =
   | "DRAFT"
+  | "ISSUING"
   | "PREVIEW"
+  | "ISSUE_FAILED"
+  | "ADMIN_REVIEW"
   | "ISSUED"
+  | "SUPERSEDED"
   | "REVOKED"
   | "REISSUED"
   | "CANCELLED";
 
-export type VerificationStatus = "VALID" | "REVOKED" | "NOT_FOUND";
+export type VerificationStatus = "VALID" | "REVOKED" | "SUPERSEDED" | "NOT_FOUND";
 
 export type CertificateModule = {
   order: number;
@@ -55,7 +64,10 @@ export type CertificateData = {
 export type CertificateRecord = {
   id: string;
   certificate_number: string;
-  verification_token: string;
+  // V2 §7: raw tokens are no longer persisted. The column is dropped by
+  // migration 007; only `verification_token_hash` survives.
+  verification_token?: string;
+  verification_token_hash?: string | null;
   template_id: string;
   template_version: string;
   renderer_version: string;
@@ -83,13 +95,28 @@ export type CertificateRecord = {
   pdf_storage_key?: string | null;
   preview_storage_key?: string | null;
 
+  // Artifact integrity (DARBARTECH_CERTIFICATE_PRODUCTION_HARDENING §25)
+  pdf_sha256?: string | null;
+  pdf_size?: number | null;
+
+  // Issuance recovery (V2 §12). `ISSUING` rows carry enough state for a
+  // periodic recovery job to decide finalize-vs-retry without minting a new
+  // certificate number.
+  issuing_started_at?: string | null;
+  last_attempt_at?: string | null;
+  attempt_count?: number | null;
+  last_error?: string | null;
+
   issued_at?: string | null;
   created_at: string;
   updated_at: string;
   revoked_at?: string | null;
   revocation_reason?: string | null;
+  revocation_category?: string | null;
 
   reissued_from_id?: string | null;
+  superseded_by_id?: string | null;
+  superseded_at?: string | null;
   data_snapshot?: Record<string, unknown>;
 };
 
@@ -107,18 +134,42 @@ export type CertificateEvent = {
   event_type:
     | "CREATED"
     | "PREVIEW_GENERATED"
+    | "ISSUING"
+    | "ISSUE_FAILED"
     | "ISSUED"
+    | "RECOVERED"
+    | "REVIEW_REQUIRED"
     | "DOWNLOADED"
     | "VERIFIED"
     | "REVOKED"
+    | "SUPERSEDED"
     | "REISSUED";
   actor_id?: string | null;
   metadata?: Record<string, unknown>;
   created_at: string;
+  // Tamper-evident chain (DARBARTECH_CERTIFICATE_PRODUCTION_HARDENING §50-51)
+  previous_event_hash?: string | null;
+  event_hash?: string | null;
+  request_id?: string | null;
+  // V2 §10: exact metadata serialization that was hashed. JSONB does not
+  // preserve key order, so the hash must be verified against the original text
+  // rather than a re-serialization of the parsed object.
+  metadata_canonical?: string | null;
 };
 
-export type CourseRecord = {
+// V2 §11: durable outbox row for a critical audit event awaiting append.
+export type AuditOutboxRecord = {
   id: string;
+  certificate_id: string;
+  event_type: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+  processed_at?: string | null;
+  attempt_count?: number;
+  last_error?: string | null;
+};
+
+export type CourseRecord = {  id: string;
   code: string;
   title: string;
   duration: string;
@@ -146,6 +197,27 @@ export type SignatoryRecord = {
   signature_storage_key?: string | null;
   active: boolean;
   is_default_secondary?: boolean;
+};
+
+// V2 §13/§14: one row per reissue attempt, keyed by an idempotency key so a
+// browser retry/double-click cannot mint a second replacement certificate.
+export type ReissueOperationStatus =
+  | "REISSUE_REQUESTED"
+  | "REISSUING"
+  | "REPLACEMENT_CREATED"
+  | "ORIGINAL_SUPERSEDED"
+  | "COMPLETED"
+  | "REISSUE_FAILED";
+
+export type ReissueOperation = {
+  id: string;
+  idempotency_key: string;
+  original_certificate_id: string;
+  replacement_certificate_id?: string | null;
+  requested_by?: string | null;
+  status: ReissueOperationStatus;
+  created_at: string;
+  completed_at?: string | null;
 };
 
 export type TextRun = {
@@ -347,24 +419,80 @@ export type RenderResult = {
   warnings?: string[];
 };
 
+// V2 §22: explicit, granular permissions replace the former broad booleans.
+// Every API enforces these server-side; UI hiding is never the control.
+export const PERMISSION_KEYS = [
+  "VIEW_CERTIFICATES",
+  "CREATE_CERTIFICATE",
+  "PREVIEW_CERTIFICATE",
+  "ISSUE_CERTIFICATE",
+  "REISSUE_CERTIFICATE",
+  "REVOKE_CERTIFICATE",
+  "DOWNLOAD_CERTIFICATE",
+  "VIEW_AUDIT",
+  "EXPORT_REPORTS",
+  "MANAGE_COURSES",
+  "MANAGE_SIGNATORIES",
+  "MANAGE_TEMPLATES",
+  "MANAGE_ADMINS",
+  "MANAGE_SETTINGS",
+  "VIEW_HEALTH",
+] as const;
+
+export type Permission = (typeof PERMISSION_KEYS)[number];
+
 export type AdminUser = {
   id: string;
   username: string;
   role: "super_admin" | "admin" | "staff";
-  permissions: {
-    create: boolean;
-    preview: boolean;
-    issue: boolean;
-    revoke: boolean;
-    download: boolean;
-    manageTemplates: boolean;
+  permissions: Record<Permission, boolean>;
+  mfaEnabled?: boolean;
+  sessionInfo?: {
+    mfa_verified: boolean;
+    scope?: string;
   };
+};
+
+// V2 §15: the persistence shape of an admin account (never leaves the server
+// with password_hash / mfa_secret attached).
+export type AdminUserRecord = AdminUser & {
+  password_hash: string;
+  is_active: boolean;
+  mfa_enabled: boolean;
+  mfa_secret: string | null;
+  last_login_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type AdminSessionRecord = {
+  id: string;
+  admin_user_id: string;
+  token_hash: string;
+  created_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  last_seen_at: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  mfa_verified?: boolean;
+  scope?: string;
+};
+
+export type AdminLoginEventRecord = {
+  id: string;
+  admin_user_id: string | null;
+  username: string | null;
+  event_type: string;
+  success: boolean;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
 };
 
 export type PublicVerificationResponse = {
   valid: boolean;
   status: VerificationStatus;
-  verification_token?: string;
   certificate?: {
     certificateNumber: string;
     recipientName: string;
@@ -378,7 +506,7 @@ export type PublicVerificationResponse = {
     issuer: string;
     status: VerificationStatus;
     revokedAt?: string;
-    revocationReason?: string;
+    supersededAt?: string;
   };
   message?: string;
 };

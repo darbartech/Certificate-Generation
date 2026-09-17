@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAdminAuth, errorResponse } from "@/lib/middleware/auth";
+import { withAdminAuth, errorResponse, serviceErrorResponse } from "@/lib/middleware/auth";
 import { downloadCertificatePdf } from "@/lib/services/certificateService";
 
-export const GET = withAdminAuth("download", async (_req: NextRequest, { params }) => {
+export const GET = withAdminAuth("DOWNLOAD_CERTIFICATE", async (_req: NextRequest, { params }) => {
   try {
     const certificateId = params?.id;
     if (!certificateId) {
@@ -27,6 +27,6 @@ export const GET = withAdminAuth("download", async (_req: NextRequest, { params 
       },
     });
   } catch (err) {
-    return errorResponse(err instanceof Error ? err.message : "Download failed", 500);
+    return serviceErrorResponse(err, "Download failed");
   }
 });

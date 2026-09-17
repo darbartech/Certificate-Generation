@@ -20,3 +20,21 @@ certificate-storage/
 
 # Large archive (exceeds GitHub 100 MB limit)
 *.zip
+
+# Supabase temporary files (§35)
+supabase/.temp/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Common OS noise
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Editor local settings
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+*~

@@ -131,9 +131,12 @@ export default function CertificatesListPage() {
               <option value="">All Statuses</option>
               <option value="DRAFT">Draft</option>
               <option value="PREVIEW">Preview</option>
+              <option value="ISSUING">Issuing</option>
               <option value="ISSUED">Issued</option>
               <option value="REISSUED">Reissued</option>
               <option value="REVOKED">Revoked</option>
+              <option value="SUPERSEDED">Superseded</option>
+              <option value="ISSUE_FAILED">Issue Failed</option>
               <option value="CANCELLED">Cancelled</option>
             </select>
             <p className="text-xs text-gray-400 whitespace-nowrap">
@@ -216,7 +219,7 @@ export default function CertificatesListPage() {
                             </Button>
                           )}
                           <Link
-                            href={`/verify/${cert.verification_token}`}
+                            href={`/verify?number=${encodeURIComponent(cert.certificate_number)}`}
                             target="_blank"
                             rel="noopener noreferrer"
                           >

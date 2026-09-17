@@ -7,14 +7,37 @@ import type { AdminUser } from "@/lib/types";
 import apiClient from "@/lib/api/client";
 import { Logo, Icon, type IconName } from "@/components/ui";
 
-const NAV_ITEMS: Array<{ href: string; label: string; icon: IconName; exact?: boolean }> = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: IconName;
+  exact?: boolean;
+  permission?:
+    | "VIEW_CERTIFICATES"
+    | "CREATE_CERTIFICATE"
+    | "MANAGE_COURSES"
+    | "MANAGE_SIGNATORIES"
+    | "MANAGE_ADMINS";
+};
+
+const NAV_ITEMS: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: "dashboard", exact: true },
-  { href: "/admin/certificates", label: "Certificates", icon: "certificate" },
-  { href: "/admin/certificates/new", label: "New Certificate", icon: "plus", exact: true },
-  { href: "/admin/courses", label: "Courses", icon: "courses" },
-  { href: "/admin/signatories", label: "Signatories", icon: "users" },
+  { href: "/admin/certificates", label: "Certificates", icon: "certificate", permission: "VIEW_CERTIFICATES" },
+  { href: "/admin/certificates/new", label: "New Certificate", icon: "plus", exact: true, permission: "CREATE_CERTIFICATE" },
+  { href: "/admin/courses", label: "Courses", icon: "courses", permission: "MANAGE_COURSES" },
+  { href: "/admin/signatories", label: "Signatories", icon: "users", permission: "MANAGE_SIGNATORIES" },
+  { href: "/admin/security", label: "Security", icon: "shield", permission: "MANAGE_ADMINS" },
   { href: "/verify", label: "Verify Certificate", icon: "verify" },
 ];
+
+const filterNavItems = (items: NavItem[], user: AdminUser | null): NavItem[] => {
+  if (!user) return items;
+  return items.filter((item) => {
+    if (!item.permission) return true;
+    if (user.role === "super_admin") return true;
+    return user.permissions[item.permission] === true;
+  });
+};
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -144,7 +167,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             </Link>
 
             <nav className="hidden md:flex items-end h-16 -mb-px" aria-label="Main">
-              {NAV_ITEMS.map((link) => (
+              {filterNavItems(NAV_ITEMS, user).map((link) => (
                 <span key={link.href} className="relative h-full flex items-center">
                   <Link
                     href={link.href}
@@ -245,7 +268,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
         {mobileOpen && (
           <nav className="md:hidden border-t border-gray-200 bg-white px-4 py-3 space-y-1 animate-fade-in" aria-label="Mobile">
-            {NAV_ITEMS.map((link) => (
+            {filterNavItems(NAV_ITEMS, user).map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -266,18 +289,18 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-4">
           <div
             role="alert"
-            className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm flex items-center justify-between gap-4 animate-fade-in"
+            className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-3 text-sm flex items-center justify-between gap-4 animate-fade-in"
           >
-            <p className="text-amber-900">
-              <span className="font-semibold">Running in degraded/offline mode</span>
-              <span className="text-amber-800">
-                {" "}— certificates issued now will not be saved permanently. Contact engineering.
+            <p className="text-red-900">
+              <span className="font-semibold">System degraded — certificate issuance is temporarily disabled</span>
+              <span className="text-red-800">
+                {" "}because persistent storage is unavailable. All write operations (Issue, Reissue, Revoke, Course save, Signatory save) are blocked. Contact engineering.
               </span>
             </p>
             <button
               type="button"
               onClick={() => { void checkHealth(); }}
-              className="shrink-0 text-xs font-medium text-amber-800 underline underline-offset-2 hover:text-amber-950 whitespace-nowrap"
+              className="shrink-0 text-xs font-medium text-red-800 underline underline-offset-2 hover:text-red-950 whitespace-nowrap"
             >
               Refresh status
             </button>

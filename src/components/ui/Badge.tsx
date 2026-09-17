@@ -48,11 +48,17 @@ export const statusToTone = (status: string): BadgeTone => {
       return "slate";
     case "PREVIEW":
       return "cyan";
+    case "ISSUING":
+      return "cyan";
     case "ISSUED":
       return "issued";
     case "REVOKED":
       return "red";
+    case "ISSUE_FAILED":
+      return "red";
     case "REISSUED":
+      return "amber";
+    case "SUPERSEDED":
       return "amber";
     case "CANCELLED":
       return "gray";

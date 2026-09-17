@@ -8,7 +8,7 @@ import {
 import { db } from "@/lib/database";
 import type { AdminUser } from "@/lib/types";
 
-export const POST = withAdminAuth("preview", async (req: NextRequest, { user }) => {
+export const POST = withAdminAuth("PREVIEW_CERTIFICATE", async (req: NextRequest, { user }) => {
   try {
     const body = await req.json();
     const parsed = certificateCreateSchema.safeParse(body);

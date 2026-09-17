@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import Link from "next/link";
 import apiClient from "@/lib/api/client";
 import type { PublicVerificationResponse } from "@/lib/types";
@@ -15,14 +15,13 @@ export default function VerifyManualPage() {
   const [result, setResult] = useState<PublicVerificationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSearch = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!certificateNumber.trim()) return;
+  const runSearch = async (value: string) => {
+    if (!value.trim()) return;
     setState("loading");
     setError(null);
     setResult(null);
     try {
-      const response = await apiClient.manualVerify(certificateNumber.trim().toUpperCase());
+      const response = await apiClient.manualVerify(value.trim().toUpperCase());
       setResult(response);
       setState("result");
     } catch (err) {
@@ -30,6 +29,24 @@ export default function VerifyManualPage() {
       setState("result");
     }
   };
+
+  const handleSearch = async (e: FormEvent) => {
+    e.preventDefault();
+    await runSearch(certificateNumber);
+  };
+
+  // Allow admin/verification links to deep-link a certificate number
+  // (V2 §7: the raw token is no longer retrievable, so links carry the number).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const number = params.get("number");
+    if (number) {
+      setCertificateNumber(number);
+      void runSearch(number);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const renderStatusBadge = (status: string) => {
     switch (status) {
@@ -42,6 +59,10 @@ export default function VerifyManualPage() {
       case "REVOKED":
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-900 text-sm font-bold tracking-wide">
           <span className="w-2 h-2 rounded-full bg-red-600"></span> CERTIFICATE REVOKED
+        </span>;
+      case "SUPERSEDED":
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-sm font-bold tracking-wide">
+          <span className="w-2 h-2 rounded-full bg-amber-600"></span> CERTIFICATE SUPERSEDED
         </span>;
       case "NOT_FOUND":
       default:
@@ -150,20 +171,40 @@ export default function VerifyManualPage() {
                 </div>
               ) : result.certificate ? (
                 <>
-                  <div className={`px-8 py-5 ${result.status === "REVOKED" ? "bg-gradient-to-r from-red-700 to-red-600" : "bg-gradient-to-r from-brand-navy to-brand-blue"}`}>
+                  <div className={`px-8 py-5 ${
+                    result.status === "REVOKED"
+                      ? "bg-gradient-to-r from-red-700 to-red-600"
+                      : result.status === "SUPERSEDED"
+                        ? "bg-gradient-to-r from-amber-700 to-amber-600"
+                        : "bg-gradient-to-r from-brand-navy to-brand-blue"
+                  }`}>
                     <div className="max-w-2xl mx-auto">
                       {renderStatusBadge(result.status)}
                     </div>
                   </div>
                   <div className="card-body p-8">
                     <div className="max-w-2xl mx-auto">
-                      {result.status === "REVOKED" && result.certificate.revocationReason && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                          <p className="text-sm font-medium text-red-800 mb-1">Revocation Details</p>
-                          <p className="text-sm text-red-700">Reason: {result.certificate.revocationReason}</p>
-                          {result.certificate.revokedAt && (
+                      {(result.status === "REVOKED" || result.status === "SUPERSEDED") && (
+                        <div className={`mb-6 p-4 rounded-lg border ${
+                          result.status === "REVOKED"
+                            ? "bg-red-50 border-red-200"
+                            : "bg-amber-50 border-amber-200"
+                        }`}>
+                          <p className={`text-sm font-medium ${
+                            result.status === "REVOKED" ? "text-red-800" : "text-amber-800"
+                          } mb-1`}>
+                            {result.status === "REVOKED"
+                              ? "This certificate has been officially revoked and is no longer valid."
+                              : "This certificate has been replaced by a newer certificate and is no longer current."}
+                          </p>
+                          {result.status === "REVOKED" && result.certificate.revokedAt && (
                             <p className="text-xs text-red-600 mt-2">
                               Revoked on {formatDateForDisplay(result.certificate.revokedAt)}
+                            </p>
+                          )}
+                          {result.status === "SUPERSEDED" && result.certificate.supersededAt && (
+                            <p className="text-xs text-amber-700 mt-2">
+                              Superseded on {formatDateForDisplay(result.certificate.supersededAt)}
                             </p>
                           )}
                         </div>

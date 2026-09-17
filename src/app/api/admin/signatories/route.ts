@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAdminAuth, jsonResponse, errorResponse } from "@/lib/middleware/auth";
+import { withAdminAuth, jsonResponse, errorResponse, serviceErrorResponse } from "@/lib/middleware/auth";
 import { db, seedDatabase } from "@/lib/database";
 import { signatoryCreateSchema } from "@/lib/validation/schemas";
 
@@ -9,11 +9,11 @@ export const GET = withAdminAuth(async () => {
     const signatories = await db.signatories.list(true);
     return jsonResponse({ success: true, data: signatories });
   } catch (err) {
-    return errorResponse(err instanceof Error ? err.message : "Failed to list signatories", 500);
+    return serviceErrorResponse(err, "Failed to list signatories");
   }
 });
 
-export const POST = withAdminAuth("manageTemplates", async (req: NextRequest) => {
+export const POST = withAdminAuth("MANAGE_SIGNATORIES", async (req: NextRequest) => {
   try {
     const body = await req.json();
     const parsed = signatoryCreateSchema.safeParse(body);
@@ -46,6 +46,6 @@ export const POST = withAdminAuth("manageTemplates", async (req: NextRequest) =>
 
     return jsonResponse({ success: true, signatory }, 201);
   } catch (err) {
-    return errorResponse(err instanceof Error ? err.message : "Failed to create signatory", 500);
+    return serviceErrorResponse(err, "Failed to create signatory");
   }
 });

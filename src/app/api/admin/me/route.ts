@@ -9,6 +9,7 @@ export const GET = withAdminAuth(async (_req, { user }) => {
       username: user!.username,
       role: user!.role,
       permissions: user!.permissions,
+      mfaEnabled: !!user!.mfaEnabled,
     },
   });
 });

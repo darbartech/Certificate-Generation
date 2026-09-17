@@ -41,6 +41,10 @@ export default function VerifyTokenPage({ params }: { params: { token: string } 
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-900 text-sm font-bold tracking-wide">
           <span className="w-2 h-2 rounded-full bg-red-600"></span> CERTIFICATE REVOKED
         </span>;
+      case "SUPERSEDED":
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-sm font-bold tracking-wide">
+          <span className="w-2 h-2 rounded-full bg-amber-600"></span> CERTIFICATE SUPERSEDED
+        </span>;
       case "NOT_FOUND":
       default:
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-sm font-semibold">
@@ -125,7 +129,13 @@ export default function VerifyTokenPage({ params }: { params: { token: string } 
                 </div>
               ) : result.certificate ? (
                 <>
-                  <div className={`px-8 py-5 ${result.status === "REVOKED" ? "bg-gradient-to-r from-red-700 to-red-600" : "bg-gradient-to-r from-brand-navy to-brand-blue"}`}>
+                  <div className={`px-8 py-5 ${
+                    result.status === "REVOKED"
+                      ? "bg-gradient-to-r from-red-700 to-red-600"
+                      : result.status === "SUPERSEDED"
+                        ? "bg-gradient-to-r from-amber-700 to-amber-600"
+                        : "bg-gradient-to-r from-brand-navy to-brand-blue"
+                  }`}>
                     <div className="max-w-2xl mx-auto flex items-center justify-between">
                       {renderStatusBadge(result.status)}
                       {result.status === "VALID" && (
@@ -138,35 +148,69 @@ export default function VerifyTokenPage({ params }: { params: { token: string } 
                   </div>
                   <div className="card-body p-8">
                     <div className="max-w-2xl mx-auto">
-                      {result.status === "REVOKED" && result.certificate.revocationReason && (
-                        <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg">
-                          <p className="text-xs font-bold text-red-800 uppercase tracking-wide mb-2">Revocation Notice</p>
-                          <p className="text-sm text-red-800 font-medium mb-1">Reason:</p>
-                          <p className="text-sm text-red-700">{result.certificate.revocationReason}</p>
-                          {result.certificate.revokedAt && (
-                            <p className="text-xs text-red-600 mt-3 pt-2 border-t border-red-100">
+                      {(result.status === "REVOKED" || result.status === "SUPERSEDED") && (
+                        <div className={`mb-8 p-4 rounded-lg border ${
+                          result.status === "REVOKED"
+                            ? "bg-red-50 border-red-200"
+                            : "bg-amber-50 border-amber-200"
+                        }`}>
+                          <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${
+                            result.status === "REVOKED" ? "text-red-800" : "text-amber-800"
+                          }`}>
+                            {result.status === "REVOKED" ? "Revocation Notice" : "Supersession Notice"}
+                          </p>
+                          <p className={`text-sm font-medium ${
+                            result.status === "REVOKED" ? "text-red-800" : "text-amber-800"
+                          }`}>
+                            {result.status === "REVOKED"
+                              ? "This certificate has been officially revoked and is no longer valid."
+                              : "This certificate has been replaced by a newer certificate and is no longer current."}
+                          </p>
+                          {result.status === "REVOKED" && result.certificate.revokedAt && (
+                            <p className={`text-xs mt-3 pt-2 border-t ${
+                              result.status === "REVOKED"
+                                ? "text-red-600 border-red-100"
+                                : "text-amber-700 border-amber-100"
+                            }`}>
                               This certificate was revoked on {formatDateForDisplay(result.certificate.revokedAt, "MMMM dd, yyyy")}
+                            </p>
+                          )}
+                          {result.status === "SUPERSEDED" && result.certificate.supersededAt && (
+                            <p className="text-xs mt-3 pt-2 border-t border-amber-100 text-amber-700">
+                              This certificate was superseded on {formatDateForDisplay(result.certificate.supersededAt, "MMMM dd, yyyy")}
                             </p>
                           )}
                         </div>
                       )}
 
                       <div className="flex items-start gap-4 mb-8 pb-6 border-b border-gray-100">
-                        <div className={`w-14 h-14 shrink-0 rounded-xl flex items-center justify-center ${result.status === "REVOKED" ? "bg-red-50 border-2 border-red-200" : "bg-brand-gold/10 border-2 border-brand-gold/40"}`}>
+                        <div className={`w-14 h-14 shrink-0 rounded-xl flex items-center justify-center ${
+                          result.status === "REVOKED"
+                            ? "bg-red-50 border-2 border-red-200"
+                            : result.status === "SUPERSEDED"
+                              ? "bg-amber-50 border-2 border-amber-200"
+                              : "bg-brand-gold/10 border-2 border-brand-gold/40"
+                        }`}>
                           {result.status === "VALID" ? (
                             <Icon name="check" size={26} className="text-brand-gold" />
                           ) : (
-                            <Icon name="remove" size={26} className="text-red-600" />
+                            <Icon name="remove" size={26} className={result.status === "SUPERSEDED" ? "text-amber-600" : "text-red-600"} />
                           )}
                         </div>
                         <div className="flex-1">
                           <h2 className="font-display text-2xl sm:text-3xl font-bold text-gray-900">
-                            {result.status === "VALID" ? "Certificate Verified" : "Certificate Has Been Revoked"}
+                            {result.status === "VALID"
+                              ? "Certificate Verified"
+                              : result.status === "SUPERSEDED"
+                                ? "Certificate Has Been Superseded"
+                                : "Certificate Has Been Revoked"}
                           </h2>
                           <p className="text-sm text-gray-500 mt-1.5">
                             {result.status === "VALID"
                               ? "This certificate has been issued by DarbarTech and is currently active."
-                              : "This certificate has been officially revoked and is no longer valid."}
+                              : result.status === "SUPERSEDED"
+                                ? "This certificate has been replaced by a newer certificate and is no longer current."
+                                : "This certificate has been officially revoked and is no longer valid."}
                           </p>
                         </div>
                       </div>

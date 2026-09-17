@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAdminAuth, jsonResponse, errorResponse } from "@/lib/middleware/auth";
+import { withAdminAuth, jsonResponse, errorResponse, serviceErrorResponse } from "@/lib/middleware/auth";
 import { certificateCreateSchema } from "@/lib/validation/schemas";
 import {
   issueCertificate,
@@ -8,7 +8,7 @@ import {
 } from "@/lib/services/certificateService";
 import type { AdminUser } from "@/lib/types";
 
-export const POST = withAdminAuth("issue", async (req: NextRequest, { params, user }) => {
+export const POST = withAdminAuth("ISSUE_CERTIFICATE", async (req: NextRequest, { params, user, requestId, ip, userAgent }) => {
   try {
     const draftId = params?.id;
     if (!draftId) {
@@ -36,7 +36,11 @@ export const POST = withAdminAuth("issue", async (req: NextRequest, { params, us
       );
     }
 
-    const result = await issueCertificate(draftId, parsed.data, (user as AdminUser).id);
+    const result = await issueCertificate(draftId, parsed.data, (user as AdminUser).id, {
+      requestId,
+      ip,
+      userAgent,
+    });
 
     if (!result.success) {
       return NextResponse.json(
@@ -50,9 +54,12 @@ export const POST = withAdminAuth("issue", async (req: NextRequest, { params, us
       success: true,
       certificate: certWithModules?.certificate || result.certificate,
       modules: certWithModules?.modules || result.modules,
+      // V2 §7: the raw verification link is returned exactly once here; it is
+      // never persisted in raw form and never returned by read endpoints.
+      verificationUrl: result.verificationUrl,
       message: "Certificate issued successfully",
     });
   } catch (err) {
-    return errorResponse(err instanceof Error ? err.message : "Issuance failed", 500);
+    return serviceErrorResponse(err, "Issuance failed");
   }
 });

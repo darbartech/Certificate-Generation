@@ -1,22 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/database";
+import { db, isPersistenceUnavailableError } from "@/lib/database";
 import { logEvent } from "@/lib/services/auditService";
 import { formatCertificateDate } from "@/lib/renderer/dateFormatter";
 import { publicVerificationSchema } from "@/lib/validation/schemas";
-import { validateRateLimit } from "@/lib/middleware/auth";
+import { getClientIp, validatePublicVerifyByToken } from "@/lib/middleware/auth";
 import { ISSUER_NAME } from "@/lib/services/certificateService";
 import { DEFAULT_PUBLIC_FIELDS_V2, DEFAULT_PUBLIC_FIELDS } from "@/lib/templates/darbartech-certificate-v2";
 import type { PublicVerificationResponse, VerificationStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+// V2 §31: Generic single message for every public-verify "not found" path so
+// attackers cannot distinguish format errors from missing records from
+// non-public statuses (DRAFT/ISSUING/etc). Never leak the reason a lookup
+// failed through this public endpoint.
+const GENERIC_NOT_FOUND: PublicVerificationResponse = {
+  valid: false,
+  status: "NOT_FOUND",
+  message: "Certificate not found or invalid",
+};
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { token: string } }
 ) {
   try {
-    const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
-    const rateLimit = validateRateLimit(`verify:${ip}`);
+    const ip = getClientIp(req);
+    const rateLimit = await validatePublicVerifyByToken(`public-verify-token:${ip}`);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { success: false, error: "Too many requests. Please try again later." },
@@ -31,24 +41,14 @@ export async function GET(
 
     const tokenParse = publicVerificationSchema.safeParse({ token: params.token });
     if (!tokenParse.success) {
-      const response: PublicVerificationResponse = {
-        valid: false,
-        status: "NOT_FOUND",
-        message: "Invalid verification link",
-      };
-      return NextResponse.json(response, { status: 404 });
+      return NextResponse.json(GENERIC_NOT_FOUND, { status: 404 });
     }
 
     const token = tokenParse.data.token;
     const cert = await db.certificates.findByToken(token);
 
     if (!cert) {
-      const response: PublicVerificationResponse = {
-        valid: false,
-        status: "NOT_FOUND",
-        message: "Certificate not found or verification link is invalid",
-      };
-      return NextResponse.json(response, { status: 404 });
+      return NextResponse.json(GENERIC_NOT_FOUND, { status: 404 });
     }
 
     try {
@@ -69,17 +69,14 @@ export async function GET(
       status = "VALID";
     } else if (cert.status === "REVOKED") {
       status = "REVOKED";
+    } else if (cert.status === "SUPERSEDED") {
+      status = "SUPERSEDED";
     } else {
-      const response: PublicVerificationResponse = {
-        valid: false,
-        status: "NOT_FOUND",
-        message: "Certificate record is not publicly available",
-        verification_token: params.token,
-      };
-      return NextResponse.json(response, { status: 404 });
+      return NextResponse.json(GENERIC_NOT_FOUND, { status: 404 });
     }
 
     const isRevoked = status === "REVOKED";
+    const isSuperseded = status === "SUPERSEDED";
 
     let modules: any[] | undefined = undefined;
     if (visibility.modules) {
@@ -96,10 +93,13 @@ export async function GET(
     }
 
     const response: PublicVerificationResponse = {
-      valid: !isRevoked,
+      valid: !isRevoked && !isSuperseded,
       status,
-      verification_token: params.token,
-      message: isRevoked ? "This certificate has been revoked" : undefined,
+      message: isRevoked
+        ? "This certificate has been revoked"
+        : isSuperseded
+          ? "This certificate has been superseded by a newer certificate"
+          : undefined,
       certificate: {
         certificateNumber: visibility.certificateNumber ? cert.certificate_number : "",
         recipientName: visibility.recipientName ? cert.recipient_name : "",
@@ -116,22 +116,27 @@ export async function GET(
         issuer: visibility.issuer ? ISSUER_NAME : "",
         status,
         revokedAt: isRevoked ? cert.revoked_at || undefined : undefined,
-        revocationReason: isRevoked ? cert.revocation_reason || undefined : undefined,
+        supersededAt: isSuperseded ? cert.superseded_at || undefined : undefined,
       },
     };
 
+    // §17: verification responses must never be cached (a revoked or superseded
+    // certificate must not continue reporting valid via a shared cache).
     return NextResponse.json(response, {
       status: 200,
       headers: {
-        "Cache-Control": isRevoked ? "no-store" : "public, max-age=3600, s-maxage=86400",
+        "Cache-Control": "no-store",
       },
     });
   } catch (err) {
+    const unavailable = isPersistenceUnavailableError(err);
     const response: PublicVerificationResponse = {
       valid: false,
       status: "NOT_FOUND",
-      message: "Verification service unavailable",
+      message: unavailable
+        ? "Verification service is temporarily unavailable. Please try again shortly."
+        : "Verification service unavailable",
     };
-    return NextResponse.json(response, { status: 500 });
+    return NextResponse.json(response, { status: unavailable ? 503 : 500 });
   }
 }

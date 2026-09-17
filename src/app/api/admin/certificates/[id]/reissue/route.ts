@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAdminAuth, jsonResponse, errorResponse } from "@/lib/middleware/auth";
+import { withAdminAuth, jsonResponse, errorResponse, serviceErrorResponse } from "@/lib/middleware/auth";
 import {
   certificateReissueSchema,
   certificateCreateSchema,
@@ -12,7 +12,7 @@ import {
 } from "@/lib/services/certificateService";
 import type { AdminUser } from "@/lib/types";
 
-export const POST = withAdminAuth("issue", async (req: NextRequest, { params, user }) => {
+export const POST = withAdminAuth("REISSUE_CERTIFICATE", async (req: NextRequest, { params, user, requestId, ip, userAgent }) => {
   try {
     const certificateId = params?.id;
     if (!certificateId) {
@@ -58,12 +58,19 @@ export const POST = withAdminAuth("issue", async (req: NextRequest, { params, us
       }
     }
 
+    const idempotencyKey =
+      req.headers.get("idempotency-key")?.trim() ||
+      req.headers.get("x-idempotency-key")?.trim() ||
+      undefined;
+
     const result = await reissueCertificate(
       parsed.data.id,
       parsed.data.reason,
       parsed.data.updates || {},
       (user as AdminUser).id,
-      parsed.data.refreshCourseData
+      parsed.data.refreshCourseData,
+      { requestId, ip, userAgent },
+      idempotencyKey
     );
 
     if (!result.success) {
@@ -78,9 +85,10 @@ export const POST = withAdminAuth("issue", async (req: NextRequest, { params, us
       success: true,
       certificate: certWithModules?.certificate || result.certificate,
       modules: certWithModules?.modules || result.modules,
+      verificationUrl: result.verificationUrl,
       message: "Certificate reissued successfully",
     });
   } catch (err) {
-    return errorResponse(err instanceof Error ? err.message : "Reissue failed", 500);
+    return serviceErrorResponse(err, "Reissue failed");
   }
 });

@@ -33,7 +33,10 @@ type ActivityItem = {
 const eventTone: Record<string, BadgeTone> = {
   ISSUED: "issued",
   REISSUED: "amber",
+  SUPERSEDED: "amber",
   REVOKED: "red",
+  ISSUE_FAILED: "red",
+  ISSUING: "cyan",
   VERIFIED: "cyan",
   DOWNLOADED: "slate",
   CREATED: "slate",

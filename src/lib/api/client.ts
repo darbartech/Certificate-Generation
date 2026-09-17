@@ -9,15 +9,26 @@ import type {
 } from "@/lib/types";
 import type { CertificateCreateInput } from "@/lib/validation/schemas";
 
+export type AdminSessionView = {
+  id: string;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+};
+
 type ApiResponse<T = unknown> = {
   success: boolean;
   data?: T;
   errors?: string[];
   error?: string;
   message?: string;
+  mfaRequired?: boolean;
   user?: AdminUser;
   certificate?: CertificateRecord;
   modules?: CertificateModuleRecord[];
+  verificationUrl?: string;
   preview?: string;
   warnings?: string[];
   events?: unknown[];
@@ -56,12 +67,12 @@ const getHeaders = (): Record<string, string> => ({
 });
 
 export const apiClient = {
-  async login(username: string, password: string): Promise<ApiResponse<AdminUser>> {
+  async login(username: string, password: string, totp?: string): Promise<ApiResponse<AdminUser>> {
     const res = await fetch("/api/admin/login", {
       method: "POST",
       headers: getHeaders(),
       credentials: "include",
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, totp }),
     });
     return handleResponse<AdminUser>(res);
   },
@@ -140,14 +151,17 @@ export const apiClient = {
     id: string,
     reason: string,
     updates?: Partial<CertificateCreateInput>,
-    refreshCourseData?: boolean
+    refreshCourseData?: boolean,
+    idempotencyKey?: string
   ): Promise<ApiResponse> {
     const body: Record<string, unknown> = { reason };
     if (updates !== undefined) body.updates = updates;
     if (refreshCourseData !== undefined) body.refreshCourseData = refreshCourseData;
+    const headers = getHeaders();
+    if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
     const res = await fetch(`/api/admin/certificates/${id}/reissue`, {
       method: "POST",
-      headers: getHeaders(),
+      headers,
       credentials: "include",
       body: JSON.stringify(body),
     });
@@ -280,6 +294,97 @@ export const apiClient = {
       body: JSON.stringify({ certificateNumber }),
     });
     return (await res.json()) as PublicVerificationResponse;
+  },
+
+  // --- Admin security: MFA, sessions, account management (§15-§17) ---------
+
+  async mfaStatus(): Promise<ApiResponse<{ mfaEnabled: boolean }>> {
+    const res = await fetch("/api/admin/me/mfa", { credentials: "include", cache: "no-store" });
+    return handleResponse(res);
+  },
+
+  async mfaSetup(): Promise<ApiResponse<{ secret: string; otpauthUri: string }>> {
+    const res = await fetch("/api/admin/me/mfa", { method: "POST", credentials: "include" });
+    return handleResponse(res);
+  },
+
+  async mfaEnable(secret: string, token: string): Promise<ApiResponse<{ mfaEnabled: boolean }>> {
+    const res = await fetch("/api/admin/me/mfa", {
+      method: "PUT",
+      headers: getHeaders(),
+      credentials: "include",
+      body: JSON.stringify({ secret, token }),
+    });
+    return handleResponse(res);
+  },
+
+  async mfaDisable(): Promise<ApiResponse<{ mfaEnabled: boolean }>> {
+    const res = await fetch("/api/admin/me/mfa", { method: "DELETE", credentials: "include" });
+    return handleResponse(res);
+  },
+
+  async mySessions(): Promise<ApiResponse<{ sessions: AdminSessionView[] }>> {
+    const res = await fetch("/api/admin/me/sessions", { credentials: "include", cache: "no-store" });
+    return handleResponse(res);
+  },
+
+  async revokeMySessions(): Promise<ApiResponse<{ revoked: number }>> {
+    const res = await fetch("/api/admin/me/sessions", { method: "DELETE", credentials: "include" });
+    return handleResponse(res);
+  },
+
+  async listAdmins(): Promise<ApiResponse<{ admins: AdminUser[] }>> {
+    const res = await fetch("/api/admin/users", { credentials: "include", cache: "no-store" });
+    return handleResponse(res);
+  },
+
+  async createAdmin(input: {
+    username: string;
+    password: string;
+    role: "super_admin" | "admin" | "staff";
+    permissions?: Partial<AdminUser["permissions"]>;
+  }): Promise<ApiResponse<{ admin: AdminUser }>> {
+    const res = await fetch("/api/admin/users", {
+      method: "POST",
+      headers: getHeaders(),
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+    return handleResponse(res);
+  },
+
+  async updateAdmin(
+    id: string,
+    input: {
+      password?: string;
+      role?: "super_admin" | "admin" | "staff";
+      isActive?: boolean;
+      permissions?: Partial<AdminUser["permissions"]>;
+    }
+  ): Promise<ApiResponse<{ admin: AdminUser }>> {
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: getHeaders(),
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+    return handleResponse(res);
+  },
+
+  async disableAdmin(id: string): Promise<ApiResponse<{ admin: AdminUser }>> {
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    return handleResponse(res);
+  },
+
+  async revokeUserSessions(id: string): Promise<ApiResponse<{ revoked: number }>> {
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}/sessions`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    return handleResponse(res);
   },
 };
 

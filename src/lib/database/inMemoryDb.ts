@@ -5,18 +5,70 @@ import type {
   CourseRecord,
   CourseModuleRecord,
   SignatoryRecord,
+  ReissueOperation,
+  AdminUserRecord,
+  AdminSessionRecord,
+  AdminLoginEventRecord,
 } from "@/lib/types";
 import { loadCanonicalCourseCatalog } from "./courseCatalogSeed";
+import crypto from "crypto";
 
-const db = {
-  certificates: new Map<string, CertificateRecord>(),
-  certificate_modules: new Map<string, CertificateModuleRecord[]>(),
-  certificate_events: new Map<string, CertificateEvent[]>(),
-  courses: new Map<string, CourseRecord>(),
-  course_modules: new Map<string, CourseModuleRecord[]>(),
-  signatories: new Map<string, SignatoryRecord>(),
-  numberSequence: new Map<string, number>(),
+const sha256Hex = (value: string): string =>
+  crypto.createHash("sha256").update(value).digest("hex");
+
+type OutboxRow = {
+  id: string;
+  certificate_id: string;
+  event_type: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+  processed_at: string | null;
+  attempt_count: number;
+  last_error: string | null;
 };
+
+type InMemoryStore = {
+  certificates: Map<string, CertificateRecord>;
+  certificate_modules: Map<string, CertificateModuleRecord[]>;
+  certificate_events: Map<string, CertificateEvent[]>;
+  event_outbox: Map<string, OutboxRow>;
+  courses: Map<string, CourseRecord>;
+  course_modules: Map<string, CourseModuleRecord[]>;
+  signatories: Map<string, SignatoryRecord>;
+  reissue_operations: Map<string, ReissueOperation>;
+  admin_users: Map<string, AdminUserRecord>;
+  admin_sessions: Map<string, AdminSessionRecord>;
+  admin_login_events: Map<string, AdminLoginEventRecord>;
+  numberSequence: Map<string, number>;
+};
+
+// The fallback store must be shared across every route bundle in a running
+// process. Next.js dev compiles each route entry separately, so a module-local
+// `Map` would give the login route and the session-resolution route different
+// stores — a session created by one is invisible to the other (login succeeds,
+// then /api/admin/me returns 401). Pin it to globalThis so all bundles share
+// the same process-wide store; in production the in-memory path is never used.
+const globalForInMemoryDb = globalThis as unknown as {
+  __darbartechInMemoryDb?: InMemoryStore;
+};
+
+const db: InMemoryStore =
+  globalForInMemoryDb.__darbartechInMemoryDb ?? {
+    certificates: new Map<string, CertificateRecord>(),
+    certificate_modules: new Map<string, CertificateModuleRecord[]>(),
+    certificate_events: new Map<string, CertificateEvent[]>(),
+    event_outbox: new Map<string, OutboxRow>(),
+    courses: new Map<string, CourseRecord>(),
+    course_modules: new Map<string, CourseModuleRecord[]>(),
+    signatories: new Map<string, SignatoryRecord>(),
+    reissue_operations: new Map<string, ReissueOperation>(),
+    admin_users: new Map<string, AdminUserRecord>(),
+    admin_sessions: new Map<string, AdminSessionRecord>(),
+    admin_login_events: new Map<string, AdminLoginEventRecord>(),
+    numberSequence: new Map<string, number>(),
+  };
+
+globalForInMemoryDb.__darbartechInMemoryDb = db;
 
 const generateId = (): string => {
   return crypto.randomUUID();
@@ -61,8 +113,15 @@ export const inMemoryDb = {
     },
 
     async findByToken(verificationToken: string): Promise<CertificateRecord | null> {
+      const tokenHash = sha256Hex(verificationToken);
       for (const cert of db.certificates.values()) {
-        if (cert.verification_token === verificationToken) return cert;
+        if (cert.verification_token_hash) {
+          if (cert.verification_token_hash === tokenHash) return cert;
+        }
+        // DEV-ONLY LEGACY FALLBACK — never reachable after devOnlyInMemory() production gate
+        else if (cert.verification_token === verificationToken) {
+          return cert;
+        }
       }
       return null;
     },
@@ -159,11 +218,13 @@ export const inMemoryDb = {
   },
 
   certificateEvents: {
-    async create(event: Omit<CertificateEvent, "id" | "created_at">): Promise<CertificateEvent> {
+    async create(
+      event: Partial<CertificateEvent> & { certificate_id: string; event_type: string } & { id: string }
+    ): Promise<CertificateEvent> {
       const record: CertificateEvent = {
-        ...event,
-        id: generateId(),
-        created_at: new Date().toISOString(),
+        ...(event as CertificateEvent),
+        id: event.id || generateId(),
+        created_at: (event as CertificateEvent).created_at || new Date().toISOString(),
       };
       const existing = db.certificate_events.get(record.certificate_id) || [];
       existing.push(record);
@@ -176,6 +237,21 @@ export const inMemoryDb = {
       return [...events].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     },
 
+    async appendWithHead(
+      event: CertificateEvent
+    ): Promise<{ ok: boolean; previousEventHash: string | null; version: number }> {
+      const existing = db.certificate_events.get(event.certificate_id) || [];
+      const latest = [...existing].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )[0];
+      const actualPrevious = latest?.event_hash ?? null;
+      if ((actualPrevious || "") !== (event.previous_event_hash || "")) {
+        return { ok: false, previousEventHash: actualPrevious, version: existing.length };
+      }
+      await inMemoryDb.certificateEvents.create(event);
+      return { ok: true, previousEventHash: actualPrevious, version: existing.length + 1 };
+    },
+
     async list(options: { limit?: number; since?: string } = {}): Promise<CertificateEvent[]> {
       const sinceMs = options.since ? new Date(options.since).getTime() : null;
       const events = Array.from(db.certificate_events.values())
@@ -183,6 +259,43 @@ export const inMemoryDb = {
         .filter((e) => (sinceMs === null ? true : new Date(e.created_at).getTime() >= sinceMs))
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       return options.limit ? events.slice(0, options.limit) : events;
+    },
+  },
+
+  auditOutbox: {
+    async enqueue(data: {
+      id: string;
+      certificate_id: string;
+      event_type: string;
+      payload: Record<string, unknown>;
+    }): Promise<void> {
+      if (db.event_outbox.has(data.id)) return;
+      db.event_outbox.set(data.id, {
+        ...data,
+        created_at: new Date().toISOString(),
+        processed_at: null,
+        attempt_count: 0,
+        last_error: null,
+      });
+    },
+
+    async listPending(limit = 50): Promise<OutboxRow[]> {
+      return Array.from(db.event_outbox.values())
+        .filter((row) => !row.processed_at)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        .slice(0, limit);
+    },
+
+    async markProcessed(id: string): Promise<void> {
+      const row = db.event_outbox.get(id);
+      if (row) row.processed_at = new Date().toISOString();
+    },
+
+    async markFailed(id: string, error: string): Promise<void> {
+      const row = db.event_outbox.get(id);
+      if (!row) return;
+      row.attempt_count += 1;
+      row.last_error = error.slice(0, 1000);
     },
   },
 
@@ -279,6 +392,35 @@ export const inMemoryDb = {
     },
   },
 
+  reissueOperations: {
+    async findByIdempotencyKey(key: string): Promise<ReissueOperation | null> {
+      for (const op of db.reissue_operations.values()) {
+        if (op.idempotency_key === key) return op;
+      }
+      return null;
+    },
+
+    async create(
+      data: Omit<ReissueOperation, "id" | "created_at">
+    ): Promise<ReissueOperation> {
+      const record: ReissueOperation = {
+        ...data,
+        id: generateId(),
+        created_at: new Date().toISOString(),
+      };
+      db.reissue_operations.set(record.id, record);
+      return record;
+    },
+
+    async update(id: string, data: Partial<ReissueOperation>): Promise<ReissueOperation | null> {
+      const existing = db.reissue_operations.get(id);
+      if (!existing) return null;
+      const updated = { ...existing, ...data };
+      db.reissue_operations.set(id, updated);
+      return updated;
+    },
+  },
+
   numbering: {
     async nextNumber(prefix: string, year: number): Promise<number> {
       const key = `${prefix}-${year}`;
@@ -286,6 +428,89 @@ export const inMemoryDb = {
       const next = current + 1;
       db.numberSequence.set(key, next);
       return next;
+    },
+  },
+
+  adminUsers: {
+    async findByUsername(username: string): Promise<AdminUserRecord | null> {
+      for (const user of db.admin_users.values()) {
+        if (user.username.toLowerCase() === username.trim().toLowerCase()) return user;
+      }
+      return null;
+    },
+    async findById(id: string): Promise<AdminUserRecord | null> {
+      return db.admin_users.get(id) || null;
+    },
+    async list(): Promise<AdminUserRecord[]> {
+      return Array.from(db.admin_users.values());
+    },
+    async create(data: AdminUserRecord): Promise<AdminUserRecord> {
+      db.admin_users.set(data.id, data);
+      return data;
+    },
+    async update(id: string, data: Partial<AdminUserRecord>): Promise<AdminUserRecord | null> {
+      const existing = db.admin_users.get(id);
+      if (!existing) return null;
+      const updated = { ...existing, ...data, updated_at: new Date().toISOString() };
+      db.admin_users.set(id, updated);
+      return updated;
+    },
+  },
+
+  adminSessions: {
+    async create(data: AdminSessionRecord): Promise<AdminSessionRecord> {
+      db.admin_sessions.set(data.id, data);
+      return data;
+    },
+    async findByTokenHash(tokenHash: string): Promise<AdminSessionRecord | null> {
+      for (const session of db.admin_sessions.values()) {
+        if (session.token_hash === tokenHash) return session;
+      }
+      return null;
+    },
+    async touch(id: string): Promise<void> {
+      const existing = db.admin_sessions.get(id);
+      if (existing) {
+        db.admin_sessions.set(id, { ...existing, last_seen_at: new Date().toISOString() });
+      }
+    },
+    async revoke(tokenHash: string): Promise<void> {
+      for (const [id, session] of db.admin_sessions) {
+        if (session.token_hash === tokenHash && !session.revoked_at) {
+          db.admin_sessions.set(id, { ...session, revoked_at: new Date().toISOString() });
+        }
+      }
+    },
+    async revokeAllForUser(adminUserId: string): Promise<number> {
+      let count = 0;
+      for (const [id, session] of db.admin_sessions) {
+        if (session.admin_user_id === adminUserId && !session.revoked_at) {
+          db.admin_sessions.set(id, { ...session, revoked_at: new Date().toISOString() });
+          count++;
+        }
+      }
+      return count;
+    },
+    async listActiveForUser(adminUserId: string): Promise<AdminSessionRecord[]> {
+      const now = Date.now();
+      return Array.from(db.admin_sessions.values()).filter(
+        (s) =>
+          s.admin_user_id === adminUserId &&
+          !s.revoked_at &&
+          new Date(s.expires_at).getTime() > now
+      );
+    },
+  },
+
+  adminLoginEvents: {
+    async record(data: AdminLoginEventRecord): Promise<AdminLoginEventRecord> {
+      db.admin_login_events.set(data.id, data);
+      return data;
+    },
+    async listRecent(limit = 50): Promise<AdminLoginEventRecord[]> {
+      return Array.from(db.admin_login_events.values())
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, limit);
     },
   },
 };

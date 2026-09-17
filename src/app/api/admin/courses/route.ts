@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAdminAuth, jsonResponse, errorResponse } from "@/lib/middleware/auth";
+import { withAdminAuth, jsonResponse, errorResponse, serviceErrorResponse } from "@/lib/middleware/auth";
 import { db, seedDatabase } from "@/lib/database";
 import { courseCreateSchema } from "@/lib/validation/schemas";
 
@@ -17,11 +17,11 @@ export const GET = withAdminAuth(async (req: NextRequest) => {
     );
     return jsonResponse({ success: true, data: coursesWithModules });
   } catch (err) {
-    return errorResponse(err instanceof Error ? err.message : "Failed to list courses", 500);
+    return serviceErrorResponse(err, "Failed to list courses");
   }
 });
 
-export const POST = withAdminAuth("manageTemplates", async (req: NextRequest) => {
+export const POST = withAdminAuth("MANAGE_COURSES", async (req: NextRequest) => {
   try {
     const body = await req.json();
     const parsed = courseCreateSchema.safeParse(body);
@@ -56,6 +56,6 @@ export const POST = withAdminAuth("manageTemplates", async (req: NextRequest) =>
 
     return jsonResponse({ success: true, course }, 201);
   } catch (err) {
-    return errorResponse(err instanceof Error ? err.message : "Failed to create course", 500);
+    return serviceErrorResponse(err, "Failed to create course");
   }
 });

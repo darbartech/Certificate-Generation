@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAdminAuth, jsonResponse, errorResponse } from "@/lib/middleware/auth";
+import { withAdminAuth, jsonResponse, errorResponse, serviceErrorResponse } from "@/lib/middleware/auth";
 import { certificateRevokeSchema } from "@/lib/validation/schemas";
 import { revokeCertificate } from "@/lib/services/certificateService";
 import type { AdminUser } from "@/lib/types";
 
-export const POST = withAdminAuth("revoke", async (req: NextRequest, { params, user }) => {
+export const POST = withAdminAuth("REVOKE_CERTIFICATE", async (req: NextRequest, { params, user, requestId, ip, userAgent }) => {
   try {
     const certificateId = params?.id;
     if (!certificateId) {
@@ -27,7 +27,9 @@ export const POST = withAdminAuth("revoke", async (req: NextRequest, { params, u
     const result = await revokeCertificate(
       parsed.data.id,
       parsed.data.reason,
-      (user as AdminUser).id
+      (user as AdminUser).id,
+      { requestId, ip, userAgent },
+      parsed.data.category
     );
 
     if (!result.success) {
@@ -43,6 +45,6 @@ export const POST = withAdminAuth("revoke", async (req: NextRequest, { params, u
       message: "Certificate revoked successfully",
     });
   } catch (err) {
-    return errorResponse(err instanceof Error ? err.message : "Revoke failed", 500);
+    return serviceErrorResponse(err, "Revoke failed");
   }
 });
