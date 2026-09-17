@@ -46,7 +46,7 @@ export const POST = withAdminAuth("preview", async (req: NextRequest, { user }) 
         success: true,
         preview: `data:application/pdf;base64,${previewBase64}`,
         contentType: result.contentType,
-        warnings: result.errors,
+        warnings: result.warnings,
       });
     } catch (err) {
       return NextResponse.json(

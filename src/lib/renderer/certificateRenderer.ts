@@ -202,7 +202,8 @@ const renderTextInField = (
   field: TemplateField,
   text: string,
   fonts: Record<string, any>,
-  errors: string[]
+  errors: string[],
+  warnings?: string[]
 ): void => {
   const pageHeight = page.getHeight();
   const letterSpacing = field.letterSpacing || 0;
@@ -267,7 +268,7 @@ const renderTextInField = (
     const smallestScaledSize = runs.reduce((m: number, r: any) => Math.min(m, (r.fontSize || largestFontSize) * scaleFactor), Infinity);
     const minSizeThreshold = (field.minFontSize || (largestFontSize * 0.6));
     if (smallestScaledSize < minSizeThreshold) {
-      errors.push(`Text "${combinedText.slice(0, 40)}${combinedText.length > 40 ? "..." : ""}" does not fit in field "${field.field}". Maximum allowed: ${field.maxLines} lines at minimum ${minSizeThreshold}pt.`);
+      warnings?.push(`Text "${combinedText.slice(0, 40)}${combinedText.length > 40 ? "..." : ""}" does not fit in field "${field.field}". Maximum allowed: ${field.maxLines} lines at minimum ${minSizeThreshold}pt.`);
     }
 
     let finalEval = scaleFactor === 1.0 ? eval1 : evaluateFit(scaleFactor);
@@ -374,7 +375,7 @@ const renderTextInField = (
     if (shrinkFrom === "wrap_then_shrink") {
       finalLines = (finalLines.length ? finalLines : [displayText]).slice(0, maxLines);
     } else {
-      errors.push(`Text "${displayText.slice(0, 40)}${displayText.length > 40 ? "..." : ""}" does not fit in field "${field.field}". Maximum allowed: ${field.maxLines} lines at minimum ${field.minFontSize}pt.`);
+      warnings?.push(`Text "${displayText.slice(0, 40)}${displayText.length > 40 ? "..." : ""}" does not fit in field "${field.field}". Maximum allowed: ${field.maxLines} lines at minimum ${field.minFontSize}pt.`);
       fontSize = field.minFontSize;
       finalLines = [displayText];
     }
@@ -459,11 +460,12 @@ const renderModules = (
   modules: CertificateModule[],
   template: TemplateConfig,
   fonts: Record<string, any>,
-  errors: string[]
+  errors: string[],
+  warnings?: string[]
 ): void => {
   const layoutValidation = validateModuleLayout(modules, template);
   if (!layoutValidation.valid) {
-    errors.push(...layoutValidation.errors);
+    warnings?.push(...layoutValidation.errors);
   }
 
   const { area, item } = template.moduleConstraints;
@@ -623,6 +625,7 @@ export const renderCertificatePdf = async (
   template: TemplateConfig = DARBARTECH_CERTIFICATE_TEMPLATE
 ): Promise<RenderResult> => {
   const errors: string[] = [];
+  const warnings: string[] = [];
 
   try {
     const doc = await PDFDocument.create();
@@ -815,7 +818,7 @@ export const renderCertificatePdf = async (
       });
     }
     if (isV2) {
-      renderTextInField(page, template.fields.salutation as any, "This is to certify that", fonts, errors);
+      renderTextInField(page, template.fields.salutation as any, "This is to certify that", fonts, errors, warnings);
 
       const heroFieldWithText = {
         ...template.fields.heroHeadline,
@@ -824,9 +827,9 @@ export const renderCertificatePdf = async (
           { ...(template.fields.heroHeadline as any).runs![1], text: " completion" },
         ]
       };
-      renderTextInField(page, heroFieldWithText, "", fonts, errors);
+      renderTextInField(page, heroFieldWithText, "", fonts, errors, warnings);
 
-      renderTextInField(page, template.fields.recipientName as any, input.recipient.name, fonts, errors);
+      renderTextInField(page, template.fields.recipientName as any, input.recipient.name, fonts, errors, warnings);
 
       // §11 — Dynamic name underlines (rules flanking the diamond)
       // BUG-13 (Round 5): the reference's rule is SHORTER than the name ink (span ÷ name
@@ -919,9 +922,9 @@ export const renderCertificatePdf = async (
         }
       }
 
-      renderTextInField(page, template.fields.postRecipientText as any, "has successfully completed the", fonts, errors);
+      renderTextInField(page, template.fields.postRecipientText as any, "has successfully completed the", fonts, errors, warnings);
 
-      renderTextInField(page, template.fields.programTitle as any, input.program.title, fonts, errors);
+      renderTextInField(page, template.fields.programTitle as any, input.program.title, fonts, errors, warnings);
 
       const durFieldWithText = {
         ...template.fields.durationSentence,
@@ -932,9 +935,9 @@ export const renderCertificatePdf = async (
           { ...(template.fields.durationSentence as any).runs![3], text: ", covering the following course modules:" },
         ]
       };
-      renderTextInField(page, durFieldWithText, "", fonts, errors);
+      renderTextInField(page, durFieldWithText, "", fonts, errors, warnings);
 
-      renderTextInField(page, template.fields.courseModulesHeading as any, "COURSE MODULES", fonts, errors);
+      renderTextInField(page, template.fields.courseModulesHeading as any, "COURSE MODULES", fonts, errors, warnings);
 
       const sorted = [...input.modules].sort((a, b) => a.order - b.order);
       const moduleCount = sorted.length;
@@ -950,9 +953,9 @@ export const renderCertificatePdf = async (
           const numeralText = mod ? String(mod.order).padStart(2, "0") : "";
           const titleText = mod?.title ?? "";
           const subtitleText = mod?.subtitle ?? "";
-          if (numeralField) renderTextInField(page, numeralField, numeralText, fonts, errors);
-          if (titleField) renderTextInField(page, titleField, titleText, fonts, errors);
-          if (subtitleField) renderTextInField(page, subtitleField, subtitleText, fonts, errors);
+          if (numeralField) renderTextInField(page, numeralField, numeralText, fonts, errors, warnings);
+          if (titleField) renderTextInField(page, titleField, titleText, fonts, errors, warnings);
+          if (subtitleField) renderTextInField(page, subtitleField, subtitleText, fonts, errors, warnings);
         }
       } else if (moduleCount > 0) {
         // Defensive fallback: spread N modules evenly across the full row instead of
@@ -967,13 +970,13 @@ export const renderCertificatePdf = async (
           const numeralField = { ...baseNumeral, x: columnX, width: columnWidth };
           const titleField = { ...baseTitle, x: columnX, width: columnWidth };
           const subtitleField = { ...baseSubtitle, x: columnX, width: columnWidth };
-          renderTextInField(page, numeralField, String(mod.order).padStart(2, "0"), fonts, errors);
-          renderTextInField(page, titleField, mod.title, fonts, errors);
-          if (mod.subtitle) renderTextInField(page, subtitleField, mod.subtitle, fonts, errors);
+          renderTextInField(page, numeralField, String(mod.order).padStart(2, "0"), fonts, errors, warnings);
+          renderTextInField(page, titleField, mod.title, fonts, errors, warnings);
+          if (mod.subtitle) renderTextInField(page, subtitleField, mod.subtitle, fonts, errors, warnings);
         });
       }
 
-      renderTextInField(page, template.fields.completionStatement as any, "Successfully completed all required course modules and demonstrated practical competency in the skills covered by the program", fonts, errors);
+      renderTextInField(page, template.fields.completionStatement as any, "Successfully completed all required course modules and demonstrated practical competency in the skills covered by the program", fonts, errors, warnings);
 
       if (input.grade) {
         const gradeFieldWithText = {
@@ -983,44 +986,50 @@ export const renderCertificatePdf = async (
             { ...(template.fields.gradeBadgeText as any).runs![1], text: input.grade.toUpperCase() },
           ]
         };
-        renderTextInField(page, gradeFieldWithText, "", fonts, errors);
+        renderTextInField(page, gradeFieldWithText, "", fonts, errors, warnings);
       }
 
-      renderTextInField(page, template.fields.certNumberLabel as any, "Certificate No.  |", fonts, errors);
-      renderTextInField(page, template.fields.issueDateMetaLabel as any, "Issue Date  |", fonts, errors);
+      renderTextInField(page, template.fields.certNumberLabel as any, "Certificate No.  |", fonts, errors, warnings);
+      renderTextInField(page, template.fields.issueDateMetaLabel as any, "Issue Date  |", fonts, errors, warnings);
 
       const shortDate = new Date(input.issueDate).toISOString().slice(0, 10);
-      renderTextInField(page, template.fields.certNumberValue as any, input.certificateNumber, fonts, errors);
-      renderTextInField(page, template.fields.issueDateMetaValue as any, shortDate, fonts, errors);
+      renderTextInField(page, template.fields.certNumberValue as any, input.certificateNumber, fonts, errors, warnings);
+      renderTextInField(page, template.fields.issueDateMetaValue as any, shortDate, fonts, errors, warnings);
 
-      renderTextInField(page, template.fields.qrCaption1 as any, "DIGITAL VERIFICATION", fonts, errors);
+      renderTextInField(page, template.fields.qrCaption1 as any, "DIGITAL VERIFICATION", fonts, errors, warnings);
       let verifyHostname = "darbartech.com/verify";
       try {
         const u = new URL(input.verificationUrl);
-        verifyHostname = `${u.hostname}/verify`;
+        // Strip "www." and fall back to the canonical brand domain when the
+        // hostname is so long it can't fit in the single-line qrCaption2c
+        // field (e.g. Vercel temp domains). The QR code itself always carries
+        // the full verification URL.
+        const host = u.hostname.replace(/^www\./, "");
+        const candidate = `${host}/verify`;
+        verifyHostname = candidate.length <= 24 ? candidate : "darbartech.com/verify";
       } catch {}
-      renderTextInField(page, template.fields.qrCaption2a as any, "Scan QR code to verify", fonts, errors);
-      renderTextInField(page, template.fields.qrCaption2b as any, "authenticity online at", fonts, errors);
-      renderTextInField(page, template.fields.qrCaption2c as any, verifyHostname, fonts, errors);
+      renderTextInField(page, template.fields.qrCaption2a as any, "Scan QR code to verify", fonts, errors, warnings);
+      renderTextInField(page, template.fields.qrCaption2b as any, "authenticity online at", fonts, errors, warnings);
+      renderTextInField(page, template.fields.qrCaption2c as any, verifyHostname, fonts, errors, warnings);
 
-      renderTextInField(page, template.fields.issueDateLabel as any, "Date of issue", fonts, errors);
-      renderTextInField(page, template.fields.issueDateValue as any, formatCertificateDate(input.issueDate), fonts, errors);
-      renderTextInField(page, template.fields.signatory1Label as any, "Authorized Signatory", fonts, errors);
-      renderTextInField(page, template.fields.signatory1Name as any, input.signatory.name, fonts, errors);
+      renderTextInField(page, template.fields.issueDateLabel as any, "Date of issue", fonts, errors, warnings);
+      renderTextInField(page, template.fields.issueDateValue as any, formatCertificateDate(input.issueDate), fonts, errors, warnings);
+      renderTextInField(page, template.fields.signatory1Label as any, "Authorized Signatory", fonts, errors, warnings);
+      renderTextInField(page, template.fields.signatory1Name as any, input.signatory.name, fonts, errors, warnings);
       const sig2Name = (input.signatory as any).signatory2?.name || "Mohan Shahi";
       const sig2Title = (input.signatory as any).signatory2?.position || "Managing Director";
-      renderTextInField(page, template.fields.signatory2Label as any, sig2Title, fonts, errors);
-      renderTextInField(page, template.fields.signatory2Name as any, sig2Name, fonts, errors);
+      renderTextInField(page, template.fields.signatory2Label as any, sig2Title, fonts, errors, warnings);
+      renderTextInField(page, template.fields.signatory2Name as any, sig2Name, fonts, errors, warnings);
 
-      renderTextInField(page, template.fields.footerVerified as any, "Verified & Authentic", fonts, errors);
-      renderTextInField(page, template.fields.footerCertNumber as any, `CERTIFICATE NO. ${input.certificateNumber}`, fonts, errors);
-      renderTextInField(page, template.fields.footerContact as any, "www.darbartech.com | info@darbartech.com | +977-9865365409", fonts, errors);
+      renderTextInField(page, template.fields.footerVerified as any, "Verified & Authentic", fonts, errors, warnings);
+      renderTextInField(page, template.fields.footerCertNumber as any, `CERTIFICATE NO. ${input.certificateNumber}`, fonts, errors, warnings);
+      renderTextInField(page, template.fields.footerContact as any, "www.darbartech.com | info@darbartech.com | +977-9865365409", fonts, errors, warnings);
     } else {
-      renderTextInField(page, template.fields.mainTitle, "CERTIFICATE OF COMPLETION", fonts, errors);
-      renderTextInField(page, template.fields.mainSubtitle, "DARBARTECH GROUP OF TECHNOLOGY", fonts, errors);
-      renderTextInField(page, template.fields.preRecipientText, "This certificate is proudly presented to", fonts, errors);
+      renderTextInField(page, template.fields.mainTitle, "CERTIFICATE OF COMPLETION", fonts, errors, warnings);
+      renderTextInField(page, template.fields.mainSubtitle, "DARBARTECH GROUP OF TECHNOLOGY", fonts, errors, warnings);
+      renderTextInField(page, template.fields.preRecipientText, "This certificate is proudly presented to", fonts, errors, warnings);
 
-      renderTextInField(page, template.fields.recipientName, input.recipient.name, fonts, errors);
+      renderTextInField(page, template.fields.recipientName, input.recipient.name, fonts, errors, warnings);
 
       const recipientField = template.fields.recipientName;
       const recipientFit = fitTextToField(input.recipient.name, recipientField);
@@ -1040,25 +1049,25 @@ export const renderCertificatePdf = async (
         thickness: 0.8,
       });
 
-      renderTextInField(page, template.fields.postRecipientLine, "having successfully completed the following program:", fonts, errors);
+      renderTextInField(page, template.fields.postRecipientLine, "having successfully completed the following program:", fonts, errors, warnings);
 
-      renderTextInField(page, template.fields.duration, `DURATION: ${input.program.duration.toUpperCase()}`, fonts, errors);
-      renderTextInField(page, template.fields.programTitle, input.program.title, fonts, errors);
+      renderTextInField(page, template.fields.duration, `DURATION: ${input.program.duration.toUpperCase()}`, fonts, errors, warnings);
+      renderTextInField(page, template.fields.programTitle, input.program.title, fonts, errors, warnings);
 
-      renderTextInField(page, template.fields.issuedBy, "ISSUED BY:\nDarbarTech Group", fonts, errors);
+      renderTextInField(page, template.fields.issuedBy, "ISSUED BY:\nDarbarTech Group", fonts, errors, warnings);
 
       if (input.grade) {
-        renderTextInField(page, template.fields.gradeLabel, "GRADE / RESULT", fonts, errors);
-        renderTextInField(page, template.fields.grade, input.grade.toUpperCase(), fonts, errors);
+        renderTextInField(page, template.fields.gradeLabel, "GRADE / RESULT", fonts, errors, warnings);
+        renderTextInField(page, template.fields.grade, input.grade.toUpperCase(), fonts, errors, warnings);
       }
 
       if (input.completionDate) {
-        renderTextInField(page, template.fields.completionLabel, "COMPLETION DATE", fonts, errors);
-        renderTextInField(page, template.fields.completionDate, formatCertificateDate(input.completionDate), fonts, errors);
+        renderTextInField(page, template.fields.completionLabel, "COMPLETION DATE", fonts, errors, warnings);
+        renderTextInField(page, template.fields.completionDate, formatCertificateDate(input.completionDate), fonts, errors, warnings);
       }
 
-      renderTextInField(page, template.fields.issueLabel, "DATE OF ISSUE", fonts, errors);
-      renderTextInField(page, template.fields.issueDate, formatCertificateDate(input.issueDate), fonts, errors);
+      renderTextInField(page, template.fields.issueLabel, "DATE OF ISSUE", fonts, errors, warnings);
+      renderTextInField(page, template.fields.issueDate, formatCertificateDate(input.issueDate), fonts, errors, warnings);
 
       const signY = mmToPt(template.signatureConfig.y + template.signatureConfig.height + 2);
       const signX = mmToPt(template.signatureConfig.x);
@@ -1072,11 +1081,11 @@ export const renderCertificatePdf = async (
         thickness: 0.6,
       });
 
-      renderTextInField(page, template.fields.signatoryName, input.signatory.name, fonts, errors);
-      renderTextInField(page, template.fields.signatoryPosition, input.signatory.position, fonts, errors);
+      renderTextInField(page, template.fields.signatoryName, input.signatory.name, fonts, errors, warnings);
+      renderTextInField(page, template.fields.signatoryPosition, input.signatory.position, fonts, errors, warnings);
 
-      renderTextInField(page, template.fields.certificateNumberLabel, "CERTIFICATE NO.", fonts, errors);
-      renderTextInField(page, template.fields.certificateNumber, input.certificateNumber, fonts, errors);
+      renderTextInField(page, template.fields.certificateNumberLabel, "CERTIFICATE NO.", fonts, errors, warnings);
+      renderTextInField(page, template.fields.certificateNumber, input.certificateNumber, fonts, errors, warnings);
 
       renderTextInField(
         page,
@@ -1088,7 +1097,7 @@ export const renderCertificatePdf = async (
     }
 
     if (!isV2) {
-      renderModules(page, input.modules, template, fonts, errors);
+      renderModules(page, input.modules, template, fonts, errors, warnings);
     }
 
     try {
@@ -1161,6 +1170,7 @@ export const renderCertificatePdf = async (
       data: Buffer.from(pdfBytes),
       contentType: "application/pdf",
       errors: errors.length > 0 ? errors : undefined,
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
   } catch (err) {
     return {

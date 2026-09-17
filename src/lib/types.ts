@@ -344,6 +344,7 @@ export type RenderResult = {
   data?: Buffer;
   contentType: "application/pdf" | "image/png" | "image/jpeg";
   errors?: string[];
+  warnings?: string[];
 };
 
 export type AdminUser = {
